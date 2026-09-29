@@ -1,17 +1,20 @@
-# Ausbaustufe 1: nur der Broker und der chat-service.
-# Postgres, Keycloak, web-gateway und batch-writer kommen in den
-# folgenden Schritten dazu.
+# Bewertung 1: Nachrichten annehmen, über RabbitMQ verteilen und in PostgreSQL speichern.
 services:
 
   rabbitmq:
     image: rabbitmq:3.13-management
+    # Ein stabiler Knotenname erhält die Broker-Daten auch bei Containerneuerstellung.
+    hostname: rabbitmq
     environment:
-      RABBITMQ_DEFAULT_USER: ${RABBITMQ_USER}
-      RABBITMQ_DEFAULT_PASS: ${RABBITMQ_PASSWORD}
+      RABBITMQ_DEFAULT_USER: ${RABBITMQ_USER:?RABBITMQ_USER in .env setzen}
+      RABBITMQ_DEFAULT_PASS: ${RABBITMQ_PASSWORD:?RABBITMQ_PASSWORD in .env setzen}
+    volumes:
+      - rabbitmq-data:/var/lib/rabbitmq
     networks:
       - chat-net
     healthcheck:
-      test: ["CMD", "rabbitmq-diagnostics", "-q", "ping"]
+      # Die Erlang-Laufzeit allein genügt nicht; der AMQP-Listener muss bereit sein.
+      test: ["CMD", "rabbitmq-diagnostics", "-q", "check_port_listener", "5672"]
       interval: 5s
       timeout: 5s
       retries: 12
@@ -21,11 +24,52 @@ services:
       context: .
       dockerfile: chat-service/Dockerfile
     environment:
-      RABBITMQ_HOST: rabbitmq
+      RABBITMQ_HOST: ${RABBITMQ_HOST:-rabbitmq}
       RABBITMQ_USER: ${RABBITMQ_USER}
       RABBITMQ_PASSWORD: ${RABBITMQ_PASSWORD}
     depends_on:
       rabbitmq:
+        condition: service_healthy
+    networks:
+      - chat-net
+
+  postgres:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:?POSTGRES_USER in .env setzen}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?POSTGRES_PASSWORD in .env setzen}
+      POSTGRES_DB: ${POSTGRES_DB:?POSTGRES_DB in .env setzen}
+    volumes:
+      - postgres-data:/var/lib/postgresql/data
+      - ./batch-writer/src/main/resources/schema.sql:/docker-entrypoint-initdb.d/001-message.sql:ro
+    networks:
+      - chat-net
+    healthcheck:
+      # TCP prüft den endgültigen Server, nicht den temporären Init-Server mit Unix-Socket.
+      test: ["CMD-SHELL", "pg_isready -h 127.0.0.1 -U \"$$POSTGRES_USER\" -d \"$$POSTGRES_DB\""]
+      interval: 5s
+      timeout: 5s
+      retries: 12
+
+  batch-writer:
+    build:
+      context: .
+      dockerfile: batch-writer/Dockerfile
+    environment:
+      RABBITMQ_HOST: ${RABBITMQ_HOST:-rabbitmq}
+      RABBITMQ_USER: ${RABBITMQ_USER}
+      RABBITMQ_PASSWORD: ${RABBITMQ_PASSWORD}
+      POSTGRES_HOST: ${POSTGRES_HOST:-postgres}
+      POSTGRES_USER: ${POSTGRES_USER}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+      POSTGRES_DB: ${POSTGRES_DB}
+      BATCH_SIZE: ${BATCH_SIZE:-100}
+      BATCH_TIMEOUT_MS: ${BATCH_TIMEOUT_MS:-200}
+      RETRY_DELAY_MS: ${RETRY_DELAY_MS:-1000}
+    depends_on:
+      rabbitmq:
+        condition: service_healthy
+      postgres:
         condition: service_healthy
     networks:
       - chat-net
@@ -35,3 +79,8 @@ services:
 networks:
   chat-net:
     name: chat-net
+
+# docker compose down erhält die Daten; down -v würde diese Volumes löschen.
+volumes:
+  rabbitmq-data:
+  postgres-data:

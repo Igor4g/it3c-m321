@@ -1,0 +1,13 @@
+# Lokale Unterlagen und Geheimnisse gehören auch nicht in den Docker-Build-Kontext.
+tempContext/
+.env
+.git/
+.idea/
+.vscode/
+.codex/
+.agents/
+.playwright-mcp/
+**/target/
+**/build/
+**/out/
+**/node_modules/

@@ -273,6 +273,8 @@ Keine automatischen Prozessneustarts sollen einen Fehler in S7 verdecken.
   `rabbitmq-data` nach `/var/lib/rabbitmq`; stabiler Hostname `rabbitmq`,
   damit der Broker nach Containerneuerstellung dieselben Daten wiederfindet.
 - Der Writer wartet beim ersten Compose-Start auf gesunden Broker und PostgreSQL.
+  Der Broker-Healthcheck prüft den aktiven AMQP-Listener auf Port 5672;
+  ein erfolgreicher Ping der Erlang-Laufzeit allein genügt nicht.
   Der PostgreSQL-Healthcheck nutzt TCP auf localhost, damit der temporäre
   Initialisierungsserver nicht vorzeitig Bereitschaft meldet.
 - Keine `ports:`-Einträge. Die Management-API des Brokers bleibt intern.

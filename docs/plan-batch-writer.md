@@ -178,6 +178,7 @@ Dateien:
 - `docker-compose.yml`: postgres, batch-writer, Healthchecks, Schema-Mount,
   benannte Volumes und stabiler Broker-Hostname; kein Host-Port.
 - `.env.example`: alle in der Spezifikation genannten Variablen.
+- `.dockerignore`: lokale Unterlagen, Zugangsdaten und Build-Ergebnisse ausschliessen.
 - `README.md`: tatsächlichen Stand und Start-/Testbefehle aktualisieren.
 
 Prüfung: `mvn clean test`, `docker compose config --quiet`,
@@ -190,7 +191,7 @@ Keine Geheimnisse oder lokale .env committen.
 Zielcommit: `feat: Batch-Writer und PostgreSQL in Compose integrieren`.
 Bezug: S2 und S3.
 
-- [ ] Schritt umgesetzt und geprüft.
+- [x] Schritt umgesetzt und geprüft (29.09.2026).
 
 ## 7. Rückstau, Transaktionszahl und zwei Instanzen nachweisen
 
@@ -363,3 +364,36 @@ werden zusammen mit dem jeweiligen Umsetzungsschritt ergänzt.
   wurden alle 300 Nachrichten in 17130 ms ab Beginn des Stopps gespeichert.
 - S7 ist auf Integrationstest-Ebene nachgewiesen. Die Abnahme im Compose-Stack
   und nach Skalierung auf zwei Writer bleibt Teil der Schritte 6 bis 8.
+
+### Schritt 6 – tatsächliche Ergebnisse vom 29.09.2026
+
+- Mehrstufiges Java-21-Dockerfile für den Writer ergänzt. Beide Builds lesen
+  die Eltern-Modulliste; die Images enthalten die ausführbaren Anwendungen.
+- Compose startet rabbitmq, chat-service, postgres und batch-writer im Netz chat-net.
+  PostgreSQL und RabbitMQ besitzen benannte Datenvolumes; RabbitMQ hat einen
+  stabilen Hostnamen. Es gibt keine veröffentlichten Host-Ports und keine
+  automatische Neustartregel, die einen Writer-Fehler verdecken könnte.
+- .env.example ergänzt und daraus lokal .env erstellt. .env und tempContext
+  bleiben unversioniert; .dockerignore schliesst sie zusätzlich vom Build-Kontext aus.
+- docker compose config --quiet und docker compose up -d --build erfolgreich.
+  Tabelle message, Primärschlüssel und Index message_room_sent_at_idx wurden
+  beim ersten Start mit leerem PostgreSQL-Volume automatisch angelegt.
+- Beim ersten Start meldete der frühere RabbitMQ-ping-Healthcheck zu früh Bereitschaft.
+  Der Writer verband sich erst nach automatischen Consumer-Wiederholungen.
+  Der Healthcheck prüft deshalb jetzt ausdrücklich den aktiven AMQP-Listener 5672.
+  Ein erneuter Stack-Start zeigte direkt eine erfolgreiche Verbindung.
+- mvn clean test: 14 Lehrertests und 85 Writer-Tests, insgesamt 99,
+  keine Fehler und keine übersprungenen Tests. Ausfalltest: 300 Nachrichten
+  in 16366 ms ab Beginn des DB-Stopps wiederhergestellt.
+- HTTP-Test aus einem temporären curl-Container im Netz chat-net: POST /messages
+  lieferte 202 und ID 853c1542-0236-4fd9-98db-b4cde7e70aff. Dieselbe ID und der
+  Inhalt Hallo aus Compose waren anschliessend in PostgreSQL vorhanden.
+- Nach docker compose down (ohne -v) und erneutem up -d --build war die Zeile
+  weiterhin vorhanden. Eine weitere HTTP-Nachricht wurde ebenfalls gespeichert
+  (ID 3fd76c59-17eb-4f77-a152-2a9c44bda725, Inhalt Hallo nach Neustart).
+- chat.persist und chat.dlq hatten danach jeweils 0 bereite und 0 unbestätigte
+  Nachrichten. Docker-Inspektion bestätigte leere PortBindings bei allen vier Diensten.
+- README enthält die tatsächlich ausgeführten Start-, HTTP- und SQL-Befehle sowie
+  Hinweise zur Erhaltung der Daten. Der lokale Stack bleibt gestartet.
+- Noch ausstehend: 1000er-Last, Transaktionsmessung, zwei Writer und vollständige
+  Abnahme auf einem frischen Klon. S2/S3 sind damit noch nicht vollständig abgenommen.
