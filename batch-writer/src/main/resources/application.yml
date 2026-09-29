@@ -1,0 +1,6 @@
+spring:
+  application:
+    name: batch-writer
+  main:
+    # Der Writer verarbeitet später Queue-Nachrichten, keine HTTP-Anfragen.
+    web-application-type: none

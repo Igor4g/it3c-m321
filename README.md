@@ -37,7 +37,7 @@ des Gesamtsystems gehört später dem Gateway.
 |---|---|---|---|
 | chat-service | Spring Boot 3, Java 21 | Nimmt Nachrichten per `POST /messages` an, legt sie auf Queue und Fanout-Exchange | vorhanden |
 | rabbitmq | RabbitMQ 3.13 | Message Queue zwischen den Services | vorhanden |
-| batch-writer | Spring Boot 3, Java 21 | Einziger Schreiber in die Datenbank | folgt |
+| batch-writer | Spring Boot 3, Java 21 | Einziger Schreiber in die Datenbank | Grundgerüst mit Starttest; Queue und DB folgen |
 | postgres | PostgreSQL | Speichert den Chat-Verlauf | folgt |
 | keycloak | Keycloak | Login (OIDC) | folgt |
 | web-gateway | nginx | Einziger nach aussen offener Port | folgt |
@@ -50,7 +50,7 @@ erreichbar.
 
 - [`docs/plan-batch-writer.md`](docs/plan-batch-writer.md) — Umsetzung in kleinen Schritten mit Tests und eigenständigen Commits.
 
-- [`docs/spec-batch-writer.md`](docs/spec-batch-writer.md) — Spezifikation für Bewertung 1; Entwurf vor der Implementierung.
+- [`docs/spec-batch-writer.md`](docs/spec-batch-writer.md) — Spezifikation für Bewertung 1; Abnahme noch ausstehend.
 
 - [`PLANUNG.md`](PLANUNG.md) — Auftrag, Stack, Architektur, Nachrichtenfluss, Queues, Datenmodell,
   Umsetzungsreihenfolge. Das ist die Grundlage für alles Weitere.

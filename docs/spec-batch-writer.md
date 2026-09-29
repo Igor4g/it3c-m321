@@ -2,7 +2,7 @@
 
 **M321 · Bewertung 1 · Stand 29.09.2026**
 
-**Status: Entwurf zur Besprechung mit der Lehrperson, vor der Implementierung.**
+**Status: Vor Beginn der Implementierung erstellt; Umsetzung begonnen, Abnahme ausstehend.**
 Dieses Dokument beschreibt das Soll-Verhalten. Die Abnahmeszenarien sind noch
 nicht ausgeführt. Die Lehrperson hat laut Rückmeldung des Lernenden zur Weiterarbeit aufgefordert.
 Eine formelle Freigabe ist nicht vorgeschrieben. Der Umsetzungsplan wird separat vor dem Code

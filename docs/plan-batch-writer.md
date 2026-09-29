@@ -53,7 +53,7 @@ Test und Nachweis:
 Zielcommit: `chore: Eigenständiges Grundgerüst für den Batch-Writer anlegen`.
 Bezug: Grundlage für S1 und S2. Noch keine Persistenz behaupten.
 
-- [ ] Schritt umgesetzt und geprüft.
+- [x] Schritt umgesetzt und geprüft (29.09.2026).
 
 ## 2. JSON-Vertrag ohne Java-Typheader
 
@@ -245,3 +245,17 @@ werden zusammen mit dem jeweiligen Umsetzungsschritt ergänzt.
   gefunden; Java 21 verwendet. `mvn validate` für den Ausgangsstand erfolgreich.
 - Docker Desktop für die folgenden Containerprüfungen gestartet; Bereitschaft
   und Integrationstests sind damit noch nicht nachgewiesen.
+
+### Schritt 1 – tatsächliche Ergebnisse vom 29.09.2026
+
+- Ausgangsstand: mvn clean test erfolgreich, 14 Lehrertests ohne Fehler/Überspringen.
+- Rot: neuer Starttest ohne Anwendungsklasse ausgeführt; erwarteter Fehler
+  wegen fehlender @SpringBootConfiguration, 1 Test mit 1 Fehler.
+- Grün: Anwendungsklasse und application.yml ergänzt; Modul-Starttest bestanden.
+- Danach mvn clean test vom Projektstamm: 14 Tests im chat-service und 1 Test
+  im batch-writer; keine Fehler und keine übersprungenen Tests.
+- Docker-Build des chat-service mit erweiterter Eltern-Modulliste erfolgreich:
+  docker build -f chat-service/Dockerfile -t it3c-m321-chat-service:step-1 .
+- Die Tests wurden mit Java 21 und dem vorhandenen Maven 3.9.12 ausgeführt.
+  Maven liegt lokal im Wrapper-Cache und wurde über seinen vollständigen Pfad gestartet.
+- Noch nicht umgesetzt: JSON-Verarbeitung, Queue-Consumer und Datenbankablage.

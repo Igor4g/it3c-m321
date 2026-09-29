@@ -24,8 +24,9 @@
         <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
     </properties>
 
-    <!-- Weitere Dienste kommen hier dazu: batch-writer, web-gateway, load-generator. -->
+    <!-- Weitere Dienste kommen später dazu: web-gateway und load-generator. -->
     <modules>
         <module>chat-service</module>
+        <module>batch-writer</module>
     </modules>
 </project>
