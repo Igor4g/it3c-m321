@@ -4,8 +4,9 @@
 
 **Status: Entwurf zur Besprechung mit der Lehrperson, vor der Implementierung.**
 Dieses Dokument beschreibt das Soll-Verhalten. Die Abnahmeszenarien sind noch
-nicht ausgeführt. Der technische Umsetzungsplan folgt nach dem Vorzeigen dieser
-Spezifikation; die Bewertungsunterlage verlangt keine ausdrückliche formelle Freigabe.
+nicht ausgeführt. Die Lehrperson hat laut Rückmeldung des Lernenden zur Weiterarbeit aufgefordert.
+Eine formelle Freigabe ist nicht vorgeschrieben. Der Umsetzungsplan wird separat vor dem Code
+festgehalten; ein Vorzeigen oder eine Lehrerrückmeldung wird nicht als bereits erfolgt behauptet.
 
 ## 1. Zweck und Abgrenzung
 

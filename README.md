@@ -48,6 +48,8 @@ erreichbar.
 
 ## Dokumente
 
+- [`docs/plan-batch-writer.md`](docs/plan-batch-writer.md) — Umsetzung in kleinen Schritten mit Tests und eigenständigen Commits.
+
 - [`docs/spec-batch-writer.md`](docs/spec-batch-writer.md) — Spezifikation für Bewertung 1; Entwurf vor der Implementierung.
 
 - [`PLANUNG.md`](PLANUNG.md) — Auftrag, Stack, Architektur, Nachrichtenfluss, Queues, Datenmodell,
