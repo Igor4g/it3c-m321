@@ -73,8 +73,8 @@ Ein Integrationstest muss zusätzlich das tatsächlich erzeugte Publisher-JSON l
 
 | Feld | JSON-Typ | Prüfung und Bedeutung |
 |---|---|---|
-| `id` | String | Pflichtfeld, gültige UUID; unverändert übernehmen |
-| `roomId` | String | Pflichtfeld, gültige UUID; keine Raumabfrage |
+| `id` | String | Pflichtfeld, vollständige UUID-Schreibweise; Wert unverändert übernehmen |
+| `roomId` | String | Pflichtfeld, vollständige UUID-Schreibweise; keine Raumabfrage |
 | `senderId` | String | Pflichtfeld, nicht leer/blank; unverändert übernehmen |
 | `senderName` | String | Pflichtfeld, nicht leer/blank; unverändert übernehmen |
 | `content` | String | Pflichtfeld, nicht leer/blank; Zeilenumbrüche und Umlaute zulässig |

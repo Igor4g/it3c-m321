@@ -80,7 +80,7 @@ Befehl: `mvn -pl batch-writer -am test`.
 Zielcommit: `feat: Nachrichtenvertrag im Batch-Writer prüfen`.
 Bezug: S5 und S8.
 
-- [ ] Schritt umgesetzt und geprüft.
+- [x] Schritt umgesetzt und geprüft (29.09.2026).
 
 ## 3. Transaktionale und idempotente Datenbankablage
 
@@ -259,3 +259,20 @@ werden zusammen mit dem jeweiligen Umsetzungsschritt ergänzt.
 - Die Tests wurden mit Java 21 und dem vorhandenen Maven 3.9.12 ausgeführt.
   Maven liegt lokal im Wrapper-Cache und wurde über seinen vollständigen Pfad gestartet.
 - Noch nicht umgesetzt: JSON-Verarbeitung, Queue-Consumer und Datenbankablage.
+### Schritt 2 – tatsächliche Ergebnisse vom 29.09.2026
+
+- Zuerst Vertragstests und Jackson-Abhängigkeit ergänzt: erwarteter roter Lauf
+  durch fehlende Klassen ChatMessage, MessageReader und InvalidMessageException
+  bei der Testkompilierung; noch keine ausgeführten Testfälle in diesem Lauf.
+- Danach eigenen record und expliziten JSON-Leser implementiert.
+  Der Leser erhält nur body und content_type; keine Java-Typheader.
+- Fehlende/falsch typisierte Werte, Format-/UTF-8-Fehler, UUIDs, Zeitpunkte,
+  nicht speicherbare Zeichen und unveränderte Textübernahme geprüft.
+- Nach Ergänzung der Tests für nachfolgendes JSON und führende/abschliessende
+  Leerzeichen: mvn clean test vom Projektstamm erfolgreich.
+- 14 Lehrertests und 64 Writer-Testfälle (63 Vertragstests, 1 Starttest),
+  insgesamt 78; keine Fehler und keine übersprungenen Tests.
+- Die Tests verwenden parametrisierte Fälle für die sechs Pflichtfelder;
+  es sind keine 63 unterschiedlichen Testmethoden.
+- Die echte AMQP-Verarbeitung mit fremdem __TypeId__, Duplikaten und Datenbank
+  bleibt wie vorgesehen Teil von Schritt 4. S5 ist noch nicht vollständig bestanden.
