@@ -48,6 +48,8 @@ erreichbar.
 
 ## Dokumente
 
+- [`docs/spec-batch-writer.md`](docs/spec-batch-writer.md) — Spezifikation für Bewertung 1; Entwurf vor der Implementierung.
+
 - [`PLANUNG.md`](PLANUNG.md) — Auftrag, Stack, Architektur, Nachrichtenfluss, Queues, Datenmodell,
   Umsetzungsreihenfolge. Das ist die Grundlage für alles Weitere.
 - [`docs/design/2026-08-28-chat-app-planung.html`](docs/design/2026-08-28-chat-app-planung.html)
