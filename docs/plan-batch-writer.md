@@ -153,8 +153,9 @@ Jetzt ergänzen wir die klar begrenzte Verantwortung für Wiederzustellung.
 
 Tests:
 - Echten PostgreSQL-Container im laufenden Test für 15 Sekunden stoppen und
-  denselben Container wieder starten. Docker-Stop/Start verwenden, damit
-  Identität und Portbindung erhalten bleiben; kein neuer Container mit anderer URL.
+  denselben Container wieder starten. Docker-Stop/Start mit ausdrücklich gebundenem,
+  frei gewähltem Testport verwenden: eine automatische Docker-Portvergabe kann sich
+  beim Wiederstart ändern. Kein neuer Container mit anderer URL.
 - 300 Nachrichten während des Ausfalls senden, keine frühe Bestätigung.
 - Nach Wiederkehr alle IDs in DB, Queue leer, DLQ unverändert;
   Spring-Kontext/Writer läuft ohne Neustart weiter, höchstens 90 Sekunden.
@@ -165,7 +166,7 @@ Befehl: `mvn -pl batch-writer -am test`.
 Zielcommit: `fix: Nachrichten bei Datenbankausfall erhalten und erneut verarbeiten`.
 Bezug: S7 sowie Zustellgarantie.
 
-- [ ] Schritt umgesetzt und geprüft.
+- [x] Schritt umgesetzt und geprüft (29.09.2026).
 
 ## 6. Reproduzierbarer Compose-Stack
 
@@ -330,3 +331,35 @@ werden zusammen mit dem jeweiligen Umsetzungsschritt ergänzt.
   Die vollständige Wiederherstellung nach echtem DB-Stop gehört zu Schritt 5.
 - S5 ist auf Integrationstest-Ebene nachgewiesen; die Abnahme auf dem fertigen
   Compose-Stack zusammen mit den übrigen Szenarien steht weiterhin aus.
+
+### Schritt 5 – tatsächliche Ergebnisse vom 29.09.2026
+
+- Neue Fehlerfalltests zuerst ergänzt; erwarteter Fehler bei der Testkompilierung,
+  weil der Consumer die Retry-Einstellung noch nicht als Konstruktorparameter erhielt.
+- Der Consumer fängt nur Datenzugriffs- und Transaktionsfehler beim Speichern ab.
+  Nach 1000 ms Pause folgen einzelne NACKs mit requeue=true für gültige Nachrichten.
+  Es gibt keine feste maximale Versuchszahl. Ungültige Nachrichten bleiben getrennt.
+- Ein Interrupt während der Pause bleibt gesetzt und wird weitergereicht;
+  der Consumer sendet in diesem Fall weder ACK noch NACK. Kanalfehler werden
+  nicht als Datenbankfehler behandelt und stoppen die weitere Bestätigung.
+- Fehlerlogs nennen Batchgrösse, Fehlerklasse und Retry-Pause, aber keine
+  SQL-Fehlermeldung mit möglichen Chat-Inhalten. Erfolgreiche Batches werden geloggt.
+- Erster Containerlauf schlug fehl: Docker vergab beim Stop/Start einen anderen
+  zufälligen Host-Port. Eine separate Wegwerf-Containerprüfung bestätigte das
+  Verhalten (32768 vor Stop, 32769 nach Start). Dieser Probecontainer wurde entfernt.
+- Die Testkonfiguration bindet deshalb einen zuvor frei gewählten Port ausdrücklich.
+  Das betrifft nur Tests. Container und Daten bleiben bei der Unterbrechung gleich;
+  Writer-Verbindung und Spring-Kontext werden nicht neu konfiguriert oder gestartet.
+- Die Prüfverbindung wartet während des PostgreSQL-Starts auf Erreichbarkeit.
+  Der Ausfalltest ist in kurze Hilfsmethoden für Senden, Ausfall und Erholung gegliedert.
+- Erfolgreicher Modulprüflauf: 85 Tests, keine Fehler oder übersprungenen Tests.
+  300 Nachrichten nach 15 Sekunden DB-Ausfall in 16545 ms ab Beginn des Stopps
+  vollständig gespeichert. Während des Ausfalls waren alle 300 im Broker vorhanden;
+  anschliessend stimmen alle IDs, Queue und DLQ sind leer. Kein Writer-Neustart.
+- Zusätzlich geprüft: erneute Zustellung nach einem früheren COMMIT erzeugt
+  keine zweite Zeile; COMMIT-Fehler und Kanalfehler beim NACK; Interrupt-Erhalt.
+- Abschliessend mvn clean test vom Projektstamm: 14 Lehrertests und 85 Writer-Tests,
+  insgesamt 99, ohne Fehler oder übersprungene Tests. Im erneuten Ausfalltest
+  wurden alle 300 Nachrichten in 17130 ms ab Beginn des Stopps gespeichert.
+- S7 ist auf Integrationstest-Ebene nachgewiesen. Die Abnahme im Compose-Stack
+  und nach Skalierung auf zwei Writer bleibt Teil der Schritte 6 bis 8.

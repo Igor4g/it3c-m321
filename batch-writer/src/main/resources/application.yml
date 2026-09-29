@@ -27,3 +27,4 @@ spring:
 batch:
   size: ${BATCH_SIZE:100}
   timeout-ms: ${BATCH_TIMEOUT_MS:200}
+  retry-delay-ms: ${RETRY_DELAY_MS:1000}

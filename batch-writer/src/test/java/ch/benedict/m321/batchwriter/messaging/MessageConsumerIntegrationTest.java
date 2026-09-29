@@ -5,6 +5,9 @@ import ch.benedict.m321.batchwriter.RabbitTestConfiguration;
 import ch.benedict.m321.batchwriter.config.RabbitConfig;
 import ch.benedict.m321.batchwriter.dto.ChatMessage;
 import ch.benedict.m321.batchwriter.service.BatchWriteService;
+import com.fasterxml.jackson.databind.JsonNode;
+import com.fasterxml.jackson.databind.ObjectMapper;
+import com.github.dockerjava.api.DockerClient;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -21,12 +24,19 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.context.annotation.Import;
 import org.springframework.jdbc.core.JdbcTemplate;
+import org.springframework.dao.DataAccessException;
 import org.springframework.test.context.bean.override.mockito.MockitoSpyBean;
+import org.testcontainers.DockerClientFactory;
+import org.testcontainers.containers.Container;
+import org.testcontainers.containers.PostgreSQLContainer;
+import org.testcontainers.containers.RabbitMQContainer;
 
 import java.nio.charset.StandardCharsets;
 import java.time.Duration;
 import java.util.List;
 import java.util.UUID;
+import java.util.HashSet;
+import java.util.Set;
 
 import static org.awaitility.Awaitility.await;
 import static org.junit.jupiter.api.Assertions.*;
@@ -47,6 +57,10 @@ class MessageConsumerIntegrationTest {
     private JdbcTemplate jdbcTemplate;
     @MockitoSpyBean
     private BatchWriteService batchWriteService;
+    @Autowired
+    private PostgreSQLContainer<?> postgresContainer;
+    @Autowired
+    private RabbitMQContainer rabbitContainer;
 
     private MessageListenerContainer listener;
 
@@ -160,6 +174,119 @@ class MessageConsumerIntegrationTest {
         verifyNoInteractions(batchWriteService);
     }
 
+    /** Eine bereits bestätigte Speicherung bleibt auch bei späterer Wiederzustellung eindeutig. */
+    @Test
+    void handlesRedeliveryAfterAnEarlierCommit() {
+        UUID id = UUID.randomUUID();
+        Message message = validMessage(id);
+        send(message);
+        consumeAndCheck(1, 1, 0);
+
+        send(message);
+        consumeAndCheck(1, 1, 0);
+
+        Integer count = jdbcTemplate.queryForObject("SELECT COUNT(*) FROM message", Integer.class);
+        assertEquals(1, count);
+    }
+
+    /** S7: derselbe Consumer übersteht 15 Sekunden echten DB-Ausfall mit 300 Nachrichten. */
+    @Test
+    void recoversAfterDatabaseOutageWithoutWriterRestart() throws Exception {
+        listener.start();
+        long startedAt = System.nanoTime();
+        Set<UUID> expectedIds = sendDuringDatabaseOutage(startedAt);
+        awaitDatabaseRecovery(startedAt);
+        assertTrue(listener.isRunning());
+        MessageListenerContainer currentListener = listenerRegistry.getListenerContainer("batch-writer");
+        assertSame(listener, currentListener);
+        List<UUID> storedIds = jdbcTemplate.queryForList("SELECT id FROM message", UUID.class);
+        Set<UUID> actualIds = new HashSet<>(storedIds);
+        assertEquals(expectedIds, actualIds);
+        listener.stop();
+        assertEquals(0, queueSize(RabbitConfig.PERSIST_QUEUE));
+        assertEquals(0, queueSize(RabbitConfig.DEAD_LETTER_QUEUE));
+        long totalMillis = elapsedMillis(startedAt);
+        assertTrue(totalMillis < 90000, "Recovery must finish within 90 seconds");
+        System.out.printf("Database outage test: 300 messages recovered in %d ms, no writer restart%n", totalMillis);
+    }
+
+    /** Stoppt nur die Datenbank und stellt sie auch bei fehlgeschlagenen Prüfungen wieder her. */
+    private Set<UUID> sendDuringDatabaseOutage(long startedAt) throws Exception {
+        DockerClientFactory factory = DockerClientFactory.instance();
+        DockerClient dockerClient = factory.client();
+        String containerId = postgresContainer.getContainerId();
+        try {
+            dockerClient.stopContainerCmd(containerId).withTimeout(1).exec();
+            Set<UUID> expectedIds = sendOutageMessages();
+            await().atMost(Duration.ofSeconds(10)).untilAsserted(() ->
+                    verify(batchWriteService, atLeast(2)).saveBatch(anyList()));
+            assertRetainedMessagesDuringOutage();
+            long elapsedMillis = elapsedMillis(startedAt);
+            long remainingOutageMillis = 15000 - elapsedMillis;
+            assertTrue(remainingOutageMillis > 0, "Outage checks must finish before database restart");
+            Thread.sleep(remainingOutageMillis);
+            return expectedIds;
+        } finally {
+            // Docker-Start erhält denselben Container und dieselbe Portbindung, auch im Fehlerfall.
+            dockerClient.startContainerCmd(containerId).exec();
+        }
+    }
+
+    /** Die aufgezeichneten IDs erlauben später einen vollständigen Vergleich statt nur einer Anzahl. */
+    private Set<UUID> sendOutageMessages() {
+        Set<UUID> ids = new HashSet<>();
+        for (int i = 0; i < 300; i++) {
+            UUID id = UUID.randomUUID();
+            ids.add(id);
+            Message message = validMessage(id);
+            send(message);
+        }
+        return ids;
+    }
+
+    /** Während PostgreSQL hochfährt, darf auch die Prüfverbindung vorübergehend fehlschlagen. */
+    private void awaitDatabaseRecovery(long startedAt) {
+        long remainingMillis = 90000 - elapsedMillis(startedAt);
+        assertTrue(remainingMillis > 0, "Recovery must finish within 90 seconds");
+        await().atMost(Duration.ofMillis(remainingMillis))
+                .ignoreExceptionsMatching(exception -> exception instanceof DataAccessException)
+                .untilAsserted(() -> {
+                    Integer count = jdbcTemplate.queryForObject("SELECT COUNT(*) FROM message", Integer.class);
+                    assertEquals(300, count);
+                });
+    }
+
+    /** Broker-Zähler umfassen sowohl bereite als auch unbestätigte Nachrichten. */
+    private void assertRetainedMessagesDuringOutage() throws Exception {
+        Container.ExecResult result = rabbitContainer.execInContainer("rabbitmqctl", "-q", "list_queues",
+                "name", "messages", "messages_unacknowledged", "--formatter=json");
+        assertEquals(0, result.getExitCode());
+        String output = result.getStdout();
+        ObjectMapper mapper = new ObjectMapper();
+        JsonNode queues = mapper.readTree(output);
+        boolean persistQueueFound = false;
+        for (JsonNode queue : queues) {
+            JsonNode nameField = queue.get("name");
+            String name = nameField.asText();
+            JsonNode countField = queue.get("messages");
+            int count = countField.asInt();
+            if (RabbitConfig.PERSIST_QUEUE.equals(name)) {
+                assertEquals(300, count, "All messages must remain in RabbitMQ while PostgreSQL is down");
+                persistQueueFound = true;
+            }
+            if (RabbitConfig.DEAD_LETTER_QUEUE.equals(name)) {
+                assertEquals(0, count);
+            }
+        }
+        assertTrue(persistQueueFound);
+    }
+
+    /** Eine monotone Uhr macht die 15-/90-Sekunden-Grenzen unabhängig von Uhrzeitkorrekturen. */
+    private long elapsedMillis(long startedAt) {
+        long elapsedNanos = System.nanoTime() - startedAt;
+        return elapsedNanos / 1_000_000;
+    }
+
     /** Nach dem Stop wären unbestätigte Lieferungen wieder bereit: die leere Queue belegt ACKs. */
     private void consumeAndCheck(int deliveries, int storedMessages, int deadLetters) {
         await().atMost(Duration.ofSeconds(10)).untilAsserted(() ->
@@ -168,6 +295,7 @@ class MessageConsumerIntegrationTest {
         await().atMost(Duration.ofSeconds(10)).untilAsserted(() -> {
             Integer count = jdbcTemplate.queryForObject("SELECT COUNT(*) FROM message", Integer.class);
             assertEquals(storedMessages, count);
+            assertEquals(0, queueSize(RabbitConfig.PERSIST_QUEUE));
             assertEquals(deadLetters, queueSize(RabbitConfig.DEAD_LETTER_QUEUE));
         });
         listener.stop();

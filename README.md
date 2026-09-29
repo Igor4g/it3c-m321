@@ -37,7 +37,7 @@ des Gesamtsystems gehört später dem Gateway.
 |---|---|---|---|
 | chat-service | Spring Boot 3, Java 21 | Nimmt Nachrichten per `POST /messages` an, legt sie auf Queue und Fanout-Exchange | vorhanden |
 | rabbitmq | RabbitMQ 3.13 | Message Queue zwischen den Services | vorhanden |
-| batch-writer | Spring Boot 3, Java 21 | Einziger Schreiber in die Datenbank | Queue → JSON-Prüfung → DB → ACK getestet; Ausfallbehandlung und Compose folgen |
+| batch-writer | Spring Boot 3, Java 21 | Einziger Schreiber in die Datenbank | Queue → JSON-Prüfung → DB → ACK und Wiederzustellung bei DB-Ausfall getestet; Compose folgt |
 | postgres | PostgreSQL 16 | Speichert den Chat-Verlauf | Schema und Integrationstests vorhanden; Compose folgt |
 | keycloak | Keycloak | Login (OIDC) | folgt |
 | web-gateway | nginx | Einziger nach aussen offener Port | folgt |

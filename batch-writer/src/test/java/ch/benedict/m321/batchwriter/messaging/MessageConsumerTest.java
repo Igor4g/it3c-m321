@@ -1,6 +1,7 @@
 package ch.benedict.m321.batchwriter.messaging;
 
 import ch.benedict.m321.batchwriter.dto.ChatMessage;
+import ch.benedict.m321.batchwriter.config.BatchProperties;
 import ch.benedict.m321.batchwriter.service.BatchWriteService;
 import com.rabbitmq.client.Channel;
 import org.junit.jupiter.api.Test;
@@ -8,12 +9,14 @@ import org.mockito.InOrder;
 import org.springframework.amqp.core.Message;
 import org.springframework.amqp.core.MessageProperties;
 import org.springframework.dao.DataAccessResourceFailureException;
+import org.springframework.transaction.TransactionSystemException;
 
 import java.io.IOException;
 import java.nio.charset.StandardCharsets;
 import java.util.List;
 
 import static org.junit.jupiter.api.Assertions.assertThrows;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.Mockito.*;
 
 /** Prüft die Reihenfolge von Speichern und Bestätigen unabhängig von Netzwerk-Timing. */
@@ -22,7 +25,8 @@ class MessageConsumerTest {
     private final MessageReader messageReader = new MessageReader();
     private final BatchWriteService batchWriteService = mock(BatchWriteService.class);
     private final Channel channel = mock(Channel.class);
-    private final MessageConsumer consumer = new MessageConsumer(messageReader, batchWriteService);
+    private final BatchProperties properties = new BatchProperties(100, 200, 1);
+    private final MessageConsumer consumer = new MessageConsumer(messageReader, batchWriteService, properties);
 
     /** Der Service muss vor dem ersten ACK erfolgreich zurückkehren. */
     @Test
@@ -74,15 +78,69 @@ class MessageConsumerTest {
 
     /** Ein Speicherfehler darf niemals als erfolgreich verarbeitete Nachricht bestätigt werden. */
     @Test
-    void doesNotAcknowledgeFailedWrite() {
+    void doesNotAcknowledgeFailedWrite() throws IOException {
         Message valid = message(41, validJson());
         List<Message> deliveries = List.of(valid);
         DataAccessResourceFailureException failure = new DataAccessResourceFailureException("Database unavailable");
         doThrow(failure).when(batchWriteService).saveBatch(anyList());
 
-        assertThrows(DataAccessResourceFailureException.class, () -> consumer.receive(deliveries, channel));
+        consumer.receive(deliveries, channel);
 
-        verifyNoInteractions(channel);
+        verify(channel).basicNack(41, false, true);
+        verifyNoMoreInteractions(channel);
+    }
+
+    /** Auch ein unklarer COMMIT-Ausgang muss erneut zugestellt werden können. */
+    @Test
+    void requeuesValidNeighboursOnCommitFailure() throws IOException {
+        Message first = message(61, validJson());
+        Message invalid = message(62, "{}");
+        Message second = message(63, validJson());
+        List<Message> deliveries = List.of(first, invalid, second);
+        TransactionSystemException failure = new TransactionSystemException("Commit failed");
+        doThrow(failure).when(batchWriteService).saveBatch(anyList());
+
+        consumer.receive(deliveries, channel);
+
+        verify(channel).basicNack(62, false, false);
+        verify(channel).basicNack(61, false, true);
+        verify(channel).basicNack(63, false, true);
+        verifyNoMoreInteractions(channel);
+    }
+
+    /** Beim Beenden bleiben die Nachrichten unbestätigt; das Interrupt-Signal bleibt erhalten. */
+    @Test
+    void preservesInterruptWithoutAcknowledging() {
+        Message valid = message(71, validJson());
+        List<Message> deliveries = List.of(valid);
+        DataAccessResourceFailureException failure = new DataAccessResourceFailureException("Database unavailable");
+        doThrow(failure).when(batchWriteService).saveBatch(anyList());
+        Thread currentThread = Thread.currentThread();
+        currentThread.interrupt();
+        try {
+            assertThrows(IOException.class, () -> consumer.receive(deliveries, channel));
+            assertTrue(currentThread.isInterrupted());
+            verifyNoInteractions(channel);
+        } finally {
+            // Nur der Test entfernt das Signal, damit weitere Tests normal laufen.
+            Thread.interrupted();
+        }
+    }
+
+    /** Nach einem fehlgeschlagenen NACK werden alte Zustellnummern nicht weiterverwendet. */
+    @Test
+    void propagatesRequeueChannelFailure() throws IOException {
+        Message first = message(81, validJson());
+        Message second = message(82, validJson());
+        List<Message> deliveries = List.of(first, second);
+        DataAccessResourceFailureException failure = new DataAccessResourceFailureException("Database unavailable");
+        doThrow(failure).when(batchWriteService).saveBatch(anyList());
+        doThrow(new IOException("Channel closed")).when(channel).basicNack(81, false, true);
+
+        assertThrows(IOException.class, () -> consumer.receive(deliveries, channel));
+
+        verify(channel).basicNack(81, false, true);
+        verifyNoMoreInteractions(channel);
     }
 
     /** Alte Zustellnummern dürfen nach einem Kanalfehler nicht weiter bestätigt werden. */
