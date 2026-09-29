@@ -24,7 +24,7 @@ Alle Aufgaben werden in **deinem Fork** gelöst. Das Original-Repository bleibt 
 ## Bauen, testen, starten
 
 ```bash
-mvn test                         # alle Tests, RabbitMQ kommt per Testcontainers
+mvn test                         # alle Tests, RabbitMQ und PostgreSQL per Testcontainers
 docker compose up --build        # RabbitMQ und chat-service im Netz chat-net
 ```
 
@@ -37,8 +37,8 @@ des Gesamtsystems gehört später dem Gateway.
 |---|---|---|---|
 | chat-service | Spring Boot 3, Java 21 | Nimmt Nachrichten per `POST /messages` an, legt sie auf Queue und Fanout-Exchange | vorhanden |
 | rabbitmq | RabbitMQ 3.13 | Message Queue zwischen den Services | vorhanden |
-| batch-writer | Spring Boot 3, Java 21 | Einziger Schreiber in die Datenbank | Grundgerüst und JSON-Prüfung; Queue und DB folgen |
-| postgres | PostgreSQL | Speichert den Chat-Verlauf | folgt |
+| batch-writer | Spring Boot 3, Java 21 | Einziger Schreiber in die Datenbank | JSON-Prüfung und transaktionale DB-Ablage getestet; Queue folgt |
+| postgres | PostgreSQL 16 | Speichert den Chat-Verlauf | Schema und Integrationstests vorhanden; Compose folgt |
 | keycloak | Keycloak | Login (OIDC) | folgt |
 | web-gateway | nginx | Einziger nach aussen offener Port | folgt |
 | Web-UI | React | Browser-Client | folgt |

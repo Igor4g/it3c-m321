@@ -4,3 +4,17 @@ spring:
   main:
     # Der Writer verarbeitet später Queue-Nachrichten, keine HTTP-Anfragen.
     web-application-type: none
+  datasource:
+    url: jdbc:postgresql://${POSTGRES_HOST:postgres}:5432/${POSTGRES_DB:chat}?connectTimeout=2&socketTimeout=5
+    username: ${POSTGRES_USER:chat}
+    password: ${POSTGRES_PASSWORD:}
+    hikari:
+      maximum-pool-size: 1
+      minimum-idle: 0
+      connection-timeout: 2000
+      # Bei einer nicht erreichbaren DB kann der Consumer später erneut versuchen.
+      initialization-fail-timeout: -1
+  sql:
+    init:
+      # PostgreSQL initialisiert das Schema; der Writer verändert es nicht.
+      mode: never

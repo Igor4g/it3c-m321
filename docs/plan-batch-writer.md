@@ -88,12 +88,15 @@ Bezug: S5 und S8.
 dauerhaft gespeichert ist. Daran hängt später die Bestätigung an RabbitMQ.
 
 Dateien:
-- Modul-POM: JDBC, PostgreSQL-Treiber und PostgreSQL-Testcontainers ergänzen.
+- Modul-POM: JDBC, PostgreSQL-Treiber, Lombok für Konstruktor-Injektion
+  und PostgreSQL-Testcontainers ergänzen.
 - `src/main/resources/schema.sql`: Tabelle message und Raum/Zeit-Index.
 - `repository/MessageRepository.java`: parametrisierter Batch-INSERT mit
   `ON CONFLICT (id) DO NOTHING`.
 - `service/BatchWriteService.java`: genau eine Transaktionsgrenze pro
   nicht leerem Batch; Rückkehr erst nach erfolgreichem COMMIT.
+  `TransactionTemplate` hält diese Grenze ausdrücklich im Service sichtbar;
+  leere Batches kehren vor Beginn einer Transaktion zurück.
 - DB-Konfiguration gemäss Spezifikation.
 - Repository-/Service-Integrationstests mit echtem PostgreSQL und derselben schema.sql.
 
@@ -107,7 +110,7 @@ Befehl: `mvn -pl batch-writer -am test`.
 Zielcommit: `feat: Nachrichten stapelweise und idempotent speichern`.
 Bezug: S3, S4 und S5.
 
-- [ ] Schritt umgesetzt und geprüft.
+- [x] Schritt umgesetzt und geprüft (29.09.2026).
 
 ## 4. Queue-Consumer mit Bestätigung nach COMMIT
 
@@ -115,7 +118,7 @@ Bezug: S3, S4 und S5.
 nun werden sie zu einem vollständigen Verarbeitungspfad verbunden.
 
 Dateien:
-- Modul-POM: AMQP, benötigtes Lombok und RabbitMQ-Testcontainers.
+- Modul-POM: AMQP und RabbitMQ-Testcontainers; Lombok ist seit Schritt 3 vorhanden.
 - `config/RabbitConfig.java`: kompatible Queues und Batch-Listener-Konfiguration.
 - `config/BatchProperties.java`: positive Batch-/Zeitwerte, nur tatsächlich
   verwendete Einstellungen.
@@ -276,3 +279,24 @@ werden zusammen mit dem jeweiligen Umsetzungsschritt ergänzt.
   es sind keine 63 unterschiedlichen Testmethoden.
 - Die echte AMQP-Verarbeitung mit fremdem __TypeId__, Duplikaten und Datenbank
   bleibt wie vorgesehen Teil von Schritt 4. S5 ist noch nicht vollständig bestanden.
+
+### Schritt 3 – tatsächliche Ergebnisse vom 29.09.2026
+
+- Zuerst Integrationstests und benötigte Abhängigkeiten ergänzt: erwarteter
+  Fehler bei der Testkompilierung wegen der noch fehlenden Klasse BatchWriteService.
+- Danach schema.sql, MessageRepository und BatchWriteService ergänzt.
+  JDBC-Batch und TransactionTemplate speichern jede nicht leere Lieferung
+  innerhalb einer Transaktion. Leere Lieferungen öffnen keine Transaktion.
+- Der Starttest und die Schreibtests verwenden einen von Spring verwalteten
+  PostgreSQL-16-Container mit derselben schema.sql wie der spätere Compose-Stack.
+  Es gibt keine umschliessende Testtransaktion, die das COMMIT verdecken könnte.
+- Fünf neue Integrationstests prüfen alle Felder mit Mikrosekundenpräzision,
+  doppelte IDs innerhalb und zwischen Lieferungen, Erhalt des ursprünglichen
+  Inhalts, vollständigen Rollback bei einer NOT-NULL-Verletzung samt anschliessender
+  erfolgreicher Speicherung sowie eine leere Lieferung.
+- mvn clean test vom Projektstamm erfolgreich: 14 Lehrertests und 69 Writer-Tests,
+  insgesamt 83; keine Fehler und keine übersprungenen Tests.
+- Lombok für die Konstruktor-Injektion wird bereits hier benötigt; der Plan
+  wurde entsprechend angepasst. Keine zusätzlichen Interfaces oder JPA.
+- Noch ausstehend: AMQP-Consumer, tatsächlicher DB-Ausfall mit Wiederzustellung,
+  Compose-Einbindung und vollständige Szenarienabnahme S3–S7.

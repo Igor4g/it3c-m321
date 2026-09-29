@@ -254,6 +254,8 @@ Feste Einstellungen, keine weiteren projektspezifischen Umgebungsvariablen:
 AMQP-Port 5672, DB-Port 5432, VHost /, ein Consumer und höchstens eine aktive
 DB-Verbindung je Writer. Empfangswartezeit ist `min(50, BATCH_TIMEOUT_MS)` ms.
 Hikari-Verbindungswartezeit: 2000 ms; minimale Leerlaufverbindungen: 0.
+`initialization-fail-timeout=-1` verhindert einen Startabbruch des Pools bei
+nicht erreichbarer DB; die eigentlichen Schreibversuche melden den Fehler weiterhin.
 JDBC-`connectTimeout=2` und `socketTimeout=5` Sekunden verhindern ein
 unbegrenztes Warten bei Verbindungsfehlern. Die Retry-Pause folgt auf den
 fehlgeschlagenen DB-Versuch; sie ist nicht dessen gesamte Laufzeit.
