@@ -137,7 +137,7 @@ Befehl: `mvn -pl batch-writer -am test`.
 Zielcommit: `feat: Queue-Nachrichten erst nach dem Speichern bestätigen`.
 Bezug: S3, S5 und S8.
 
-- [ ] Schritt umgesetzt und geprüft.
+- [x] Schritt umgesetzt und geprüft (29.09.2026).
 
 ## 5. Datenbankausfall und automatische Erholung
 
@@ -300,3 +300,33 @@ werden zusammen mit dem jeweiligen Umsetzungsschritt ergänzt.
   wurde entsprechend angepasst. Keine zusätzlichen Interfaces oder JPA.
 - Noch ausstehend: AMQP-Consumer, tatsächlicher DB-Ausfall mit Wiederzustellung,
   Compose-Einbindung und vollständige Szenarienabnahme S3–S7.
+
+### Schritt 4 – tatsächliche Ergebnisse vom 29.09.2026
+
+- Zuerst Ablauf-Tests ergänzt: erwarteter Fehler bei der Testkompilierung,
+  weil MessageConsumer noch nicht existierte.
+- RabbitConfig deklariert chat.persist und chat.dlq mit denselben Argumenten
+  wie der chat-service. Der Listener erhält rohe AMQP-Nachrichten ohne
+  automatische Umwandlung anhand fremder Java-Klassennamen.
+- Spring sammelt bis zu 100 Nachrichten mit 200 ms Batch-Zeitgrenze und
+  höchstens 50 ms Empfangswartezeit. Eine Instanz hat genau einen Consumer
+  und prefetch=100. Beide Batch-Einstellungen müssen positiv sein.
+- MessageConsumer prüft einzeln, verwirft nur ungültige Lieferungen in die DLQ,
+  speichert alle gültigen Nachrichten zusammen und sendet erst danach einzelne ACKs.
+  Ein rein ungültiger Batch ruft den Schreibservice nicht auf.
+- Fünf Ablauf-Tests prüfen ACK nach Service-Rückkehr, einzelne NACKs,
+  keine Speicherung rein ungültiger Daten, kein ACK bei DB-Fehler und
+  Weitergabe von Kanalfehlern ohne weitere Bestätigungen.
+- Sechs Tests mit echten RabbitMQ-/PostgreSQL-Containern prüfen Einzelnachricht,
+  Duplikate ohne Typheader, fremden Publisher-Typheader, 100er-Batch plus 3er-Rest,
+  fehlerhafte Nachricht zwischen gültigen Nachbarn und rein ungültigen Batch.
+  Nach dem Stop des Consumers bleibt die Queue leer; unbestätigte Nachrichten
+  würden beim Schliessen des Kanals wieder in der Queue erscheinen.
+- Modulprüfung erfolgreich: 80 Writer-Tests, keine Fehler oder übersprungenen Tests.
+- Anschliessend mvn clean test vom Projektstamm: 14 Lehrertests und 80 Writer-Tests,
+  insgesamt 94; keine Fehler und keine übersprungenen Tests.
+- Noch nicht fertig: gezielte Pause und Wiederzustellung bei DB-Ausfall.
+  Der Speicherfehler wird derzeit weitergereicht und niemals mit ACK bestätigt.
+  Die vollständige Wiederherstellung nach echtem DB-Stop gehört zu Schritt 5.
+- S5 ist auf Integrationstest-Ebene nachgewiesen; die Abnahme auf dem fertigen
+  Compose-Stack zusammen mit den übrigen Szenarien steht weiterhin aus.

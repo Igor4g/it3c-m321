@@ -1,6 +1,7 @@
 package ch.benedict.m321.batchwriter.service;
 
 import ch.benedict.m321.batchwriter.PostgresTestConfiguration;
+import ch.benedict.m321.batchwriter.RabbitTestConfiguration;
 import ch.benedict.m321.batchwriter.dto.ChatMessage;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -19,7 +20,7 @@ import static org.junit.jupiter.api.Assertions.assertThrows;
 
 /** Prüft den Schreibweg samt echter Transaktion ohne eine umschliessende Testtransaktion. */
 @SpringBootTest
-@Import(PostgresTestConfiguration.class)
+@Import({PostgresTestConfiguration.class, RabbitTestConfiguration.class})
 class BatchWriteServiceIntegrationTest {
 
     @Autowired

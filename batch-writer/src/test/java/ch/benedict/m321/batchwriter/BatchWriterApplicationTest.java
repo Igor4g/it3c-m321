@@ -14,7 +14,7 @@ import static org.junit.jupiter.api.Assertions.assertInstanceOf;
  * Der Dienst verarbeitet später Queue-Nachrichten und benötigt keinen Webserver.
  */
 @SpringBootTest
-@Import(PostgresTestConfiguration.class)
+@Import({PostgresTestConfiguration.class, RabbitTestConfiguration.class})
 class BatchWriterApplicationTest {
 
     @Autowired

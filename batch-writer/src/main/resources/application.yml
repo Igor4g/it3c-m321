@@ -2,7 +2,7 @@ spring:
   application:
     name: batch-writer
   main:
-    # Der Writer verarbeitet später Queue-Nachrichten, keine HTTP-Anfragen.
+    # Der Writer verarbeitet Queue-Nachrichten, keine HTTP-Anfragen.
     web-application-type: none
   datasource:
     url: jdbc:postgresql://${POSTGRES_HOST:postgres}:5432/${POSTGRES_DB:chat}?connectTimeout=2&socketTimeout=5
@@ -18,3 +18,12 @@ spring:
     init:
       # PostgreSQL initialisiert das Schema; der Writer verändert es nicht.
       mode: never
+  rabbitmq:
+    host: ${RABBITMQ_HOST:rabbitmq}
+    port: 5672
+    username: ${RABBITMQ_USER:guest}
+    password: ${RABBITMQ_PASSWORD:guest}
+
+batch:
+  size: ${BATCH_SIZE:100}
+  timeout-ms: ${BATCH_TIMEOUT_MS:200}
