@@ -214,7 +214,7 @@ Befehl, Ist-Wert, Soll-Wert, Ergebnis. Keine ausgedachten Messwerte.
 Zielcommit: `test: Batch-Verarbeitung und Skalierung nachweisen`.
 Bezug: S4, S6 und S7.
 
-- [ ] Schritt umgesetzt und geprüft.
+- [x] Schritt umgesetzt und geprüft (29.09.2026).
 
 ## 8. Vollständige Abnahme und Abgabestand
 
@@ -397,3 +397,26 @@ werden zusammen mit dem jeweiligen Umsetzungsschritt ergänzt.
   Hinweise zur Erhaltung der Daten. Der lokale Stack bleibt gestartet.
 - Noch ausstehend: 1000er-Last, Transaktionsmessung, zwei Writer und vollständige
   Abnahme auf einem frischen Klon. S2/S3 sind damit noch nicht vollständig abgenommen.
+
+### Schritt 7 – tatsächliche Ergebnisse vom 29.09.2026
+
+- Geprüfter Anwendungsstand: 36eb6ae. Keine Änderungen am Anwendungscode nötig.
+- S3: 1000 IDs gespeichert, Queue leer; 7,70 s Sendezeit und 1,40 s bis zum Nachweis.
+- S4: Rückstau mit 1000 ready, 0 unacknowledged und 0 Consumern;
+  Verarbeitung samt Nachweis nach Writer-Start in 6,22 s. Vollständige DB-Statistik
+  stieg von 300 auf 320: 20 Transaktionen insgesamt bei höchstens 100 erlaubt.
+- S5: identischer JSON-Body zweimal ohne Java-Typheader; eine Zeile,
+  alle sechs Felder unverändert, keine DLQ-Nachricht.
+- S6: zwei Consumer an chat.persist; weitere 1000 IDs gespeichert, beide Writer
+  verarbeiteten je 500 Nachrichten. Sendezeit 6,35 s, Nachweis danach in 1,34 s.
+- S7: DB 15 Sekunden gestoppt; alle 300 Nachrichten innerhalb des Ausfalls
+  versendet und im Broker nachgewiesen (100 ready, 200 unacknowledged).
+  Alle IDs nach 21,12 s ab DB-Stopp gespeichert, Queue/DLQ leer und beide
+  Writer-Prozesse unverändert. Erlaubt sind höchstens 90 s.
+- Drei Messprobleme korrigiert und im Abnahmebericht offengelegt: CRLF im
+  Linux-Prüfskript, noch unvollständige PostgreSQL-Statistik und als Job-Fehler
+  übernommener Docker-Fortschritt auf stderr. Die betroffenen Prüfungen wurden wiederholt.
+- Befehle in der Spezifikation angepasst; ausführliche Ergebnisse und Grenzen
+  in docs/abnahme-batch-writer.md. Keine Daten zwischen den Szenarien gelöscht.
+- Der lokale Stack bleibt mit zwei Writern gestartet. Frischer Klon,
+  vollständige Abfolge S1–S8, Schlussreview und Abgabe bleiben Schritt 8.

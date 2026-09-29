@@ -299,9 +299,11 @@ Queues geleert noch Tabellen/Volumes gelöscht. Jede Sendeserie bekommt eine
 neue Raum-UUID; geprüft werden die tatsächlich zurückgegebenen Nachrichten-IDs.
 Dadurch stören Datensätze vorheriger Szenarien nicht.
 
-Die folgenden Befehle sind die vorgesehene eigene Abnahme, nicht das unbekannte
-Prüfskript des Lehrers. Sie sind **noch nicht am implementierten Stack erprobt**.
-Ergebnisse und Zeiten werden erst nach echten Läufen dokumentiert.
+Die folgenden Befehle beschreiben die eigene Abnahme, nicht das unbekannte
+Prüfskript des Lehrers. Die Hilfsfunktionen und S3–S7 wurden am 29.09.2026 am
+lokalen Compose-Stack erprobt und dabei korrigiert. Messergebnisse stehen in
+[abnahme-batch-writer.md](abnahme-batch-writer.md). Die vollständige Abfolge
+S1–S8 auf einem frischen Klon steht noch aus.
 Voraussetzung für die Beispiele: PowerShell 7, Java 21, Maven und laufendes Docker.
 Befehle im Projektstamm ausführen. SQL und HTTP bleiben innerhalb von Docker.
 
@@ -346,7 +348,8 @@ while [ "$index" -le "$count" ]; do
     index=$((index + 1))
 done
 '@
-    $responses = @($sendScript | docker run --rm -i --network chat-net --entrypoint sh curlimages/curl:8.10.1 -s -- $RoomId $Count)
+    # PowerShell unter Windows liefert CRLF; die Linux-Shell erwartet LF.
+    $responses = @($sendScript | docker run --rm -i --network chat-net --entrypoint sh curlimages/curl:8.10.1 -c 'tr -d "\r" | sh -s -- "$@"' -- $RoomId $Count)
     if ($LASTEXITCODE -ne 0) { throw 'Sendeserie fehlgeschlagen; keine automatische Wiederholung.' }
     if ($responses.Count -ne $Count) { throw 'Unerwartete Anzahl HTTP-Antworten.' }
     foreach ($line in $responses) {
@@ -456,8 +459,17 @@ Start-Sleep -Seconds 2
 $before = Get-TransactionCount
 docker compose start batch-writer
 Wait-ForMessages $roomId $messageIds 60
-Start-Sleep -Seconds 2
-$after = Get-TransactionCount
+# Nach abgeschlossener Verarbeitung die DB-Verbindung sauber schliessen,
+# damit noch lokale Backend-Statistik im Endwert enthalten ist.
+docker compose stop batch-writer
+if ($LASTEXITCODE -ne 0) { throw 'S4: Writer-Stop zur Statistikabgabe fehlgeschlagen.' }
+try {
+    Start-Sleep -Seconds 2
+    $after = Get-TransactionCount
+} finally {
+    docker compose start batch-writer
+    if ($LASTEXITCODE -ne 0) { throw 'S4: Writer-Neustart fehlgeschlagen.' }
+}
 $transactionDelta = $after - $before
 $transactionDelta
 if ($transactionDelta -le 0 -or $transactionDelta -gt 100) {
@@ -472,8 +484,11 @@ als zusätzlicher Testabbruch; die Unterlage nennt bei S4 keine eigene Zeitgrenz
 Die Differenz enthält auch Abnahme-SELECTs und sonstige Transaktionen der
 Anwendungsdatenbank. Es wird nichts pauschal abgezogen; höchstens 100 insgesamt
 ist ein konservativer Nachweis. Keine parallelen fremden DB-Nutzer während der Messung.
-Die kurze Pause berücksichtigt die verzögerte Statistikaktualisierung;
-das spätere Ergebnis wird zusätzlich auf Plausibilität geprüft.
+Nach leerer Queue wird der Writer für den Endwert kurz sauber gestoppt und
+anschliessend wieder gestartet. Dadurch endet seine DB-Sitzung und noch lokale
+Statistik wird veröffentlicht. Eine blosse Wartezeit von zwei Sekunden ergab
+im ersten Versuch einen unvollständigen Wert. Es werden weder Daten noch
+Statistikzähler zurückgesetzt. Das Ergebnis wird zusätzlich auf Plausibilität geprüft.
 [PostgreSQL: xact_commit und xact_rollback](https://www.postgresql.org/docs/16/monitoring-stats.html).
 
 ### S5 – Identisches JSON zweimal, ohne Java-Header
@@ -505,6 +520,8 @@ for ($i = 0; $i -lt 2; $i++) {
     if (-not $result.routed) { throw 'Nachricht wurde nicht geroutet.' }
 }
 Wait-ForMessages $roomId @($messageId.ToString()) 60
+$matchingRows = Invoke-ChatSql "SELECT count(*) FROM message WHERE id = '$messageId' AND room_id = '$roomId' AND sender_id = 'acceptance' AND sender_name = 'Acceptance Test' AND content = 'Duplicate check' AND sent_at = '2026-09-29T08:00:00Z';"
+if ($matchingRows -ne '1') { throw 'S5: Feldwerte wurden verändert.' }
 $deadAfter = Get-QueueState 'chat.dlq'
 if ($deadAfter.messages_ready -ne $deadBefore.messages_ready -or $deadAfter.messages_unacknowledged -ne 0) {
     throw 'S5: Unerwartete Nachricht in der DLQ.'
@@ -552,7 +569,8 @@ $restartJob = Start-Job -ArgumentList (Get-Location).Path, $stoppedAt -ScriptBlo
     Set-Location -LiteralPath $projectPath
     $remaining = 15 - ((Get-Date) - $stoppedAt).TotalSeconds
     if ($remaining -gt 0) { Start-Sleep -Milliseconds ([int]($remaining * 1000)) }
-    docker compose start postgres
+    # Docker schreibt Fortschritt auf stderr; als Text aus dem Job übernehmen.
+    docker compose start postgres 2>&1 | Out-String | Write-Output
     if ($LASTEXITCODE -ne 0) { throw 'PostgreSQL-Neustart fehlgeschlagen.' }
 }
 $roomId = [guid]::NewGuid()
