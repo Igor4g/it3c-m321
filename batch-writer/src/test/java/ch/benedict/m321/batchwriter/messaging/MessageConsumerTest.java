@@ -22,6 +22,14 @@ import static org.mockito.Mockito.*;
 /** Prüft die Reihenfolge von Speichern und Bestätigen unabhängig von Netzwerk-Timing. */
 class MessageConsumerTest {
 
+    // Ein fester Vertrag ohne Java-Klassennamen hält den Fokus auf ACK/NACK.
+    private static final String VALID_JSON = """
+            {"id":"11111111-1111-4111-8111-111111111111",
+             "roomId":"22222222-2222-4222-8222-222222222222",
+             "senderId":"anna","senderName":"Anna Muster",
+             "content":"Hallo","sentAt":"2026-09-29T08:00:00Z"}
+            """;
+
     private final MessageReader messageReader = new MessageReader();
     private final BatchWriteService batchWriteService = mock(BatchWriteService.class);
     private final Channel channel = mock(Channel.class);
@@ -31,8 +39,8 @@ class MessageConsumerTest {
     /** Der Service muss vor dem ersten ACK erfolgreich zurückkehren. */
     @Test
     void savesBeforeAcknowledgingEachDelivery() throws IOException {
-        Message first = message(11, validJson());
-        Message second = message(12, validJson());
+        Message first = message(11, VALID_JSON);
+        Message second = message(12, VALID_JSON);
         byte[] body = first.getBody();
         ChatMessage parsed = messageReader.read(body, "application/json");
         List<ChatMessage> expected = List.of(parsed, parsed);
@@ -51,7 +59,7 @@ class MessageConsumerTest {
     @Test
     void rejectsOnlyInvalidDelivery() throws IOException {
         Message invalid = message(21, "{}");
-        Message valid = message(22, validJson());
+        Message valid = message(22, VALID_JSON);
         List<Message> deliveries = List.of(invalid, valid);
 
         consumer.receive(deliveries, channel);
@@ -79,7 +87,7 @@ class MessageConsumerTest {
     /** Ein Speicherfehler darf niemals als erfolgreich verarbeitete Nachricht bestätigt werden. */
     @Test
     void doesNotAcknowledgeFailedWrite() throws IOException {
-        Message valid = message(41, validJson());
+        Message valid = message(41, VALID_JSON);
         List<Message> deliveries = List.of(valid);
         DataAccessResourceFailureException failure = new DataAccessResourceFailureException("Database unavailable");
         doThrow(failure).when(batchWriteService).saveBatch(anyList());
@@ -93,9 +101,9 @@ class MessageConsumerTest {
     /** Auch ein unklarer COMMIT-Ausgang muss erneut zugestellt werden können. */
     @Test
     void requeuesValidNeighboursOnCommitFailure() throws IOException {
-        Message first = message(61, validJson());
+        Message first = message(61, VALID_JSON);
         Message invalid = message(62, "{}");
-        Message second = message(63, validJson());
+        Message second = message(63, VALID_JSON);
         List<Message> deliveries = List.of(first, invalid, second);
         TransactionSystemException failure = new TransactionSystemException("Commit failed");
         doThrow(failure).when(batchWriteService).saveBatch(anyList());
@@ -111,7 +119,7 @@ class MessageConsumerTest {
     /** Beim Beenden bleiben die Nachrichten unbestätigt; das Interrupt-Signal bleibt erhalten. */
     @Test
     void preservesInterruptWithoutAcknowledging() {
-        Message valid = message(71, validJson());
+        Message valid = message(71, VALID_JSON);
         List<Message> deliveries = List.of(valid);
         DataAccessResourceFailureException failure = new DataAccessResourceFailureException("Database unavailable");
         doThrow(failure).when(batchWriteService).saveBatch(anyList());
@@ -119,7 +127,8 @@ class MessageConsumerTest {
         currentThread.interrupt();
         try {
             assertThrows(IOException.class, () -> consumer.receive(deliveries, channel));
-            assertTrue(currentThread.isInterrupted());
+            boolean interrupted = currentThread.isInterrupted();
+            assertTrue(interrupted);
             verifyNoInteractions(channel);
         } finally {
             // Nur der Test entfernt das Signal, damit weitere Tests normal laufen.
@@ -130,12 +139,13 @@ class MessageConsumerTest {
     /** Nach einem fehlgeschlagenen NACK werden alte Zustellnummern nicht weiterverwendet. */
     @Test
     void propagatesRequeueChannelFailure() throws IOException {
-        Message first = message(81, validJson());
-        Message second = message(82, validJson());
+        Message first = message(81, VALID_JSON);
+        Message second = message(82, VALID_JSON);
         List<Message> deliveries = List.of(first, second);
         DataAccessResourceFailureException failure = new DataAccessResourceFailureException("Database unavailable");
         doThrow(failure).when(batchWriteService).saveBatch(anyList());
-        doThrow(new IOException("Channel closed")).when(channel).basicNack(81, false, true);
+        IOException channelFailure = new IOException("Channel closed");
+        doThrow(channelFailure).when(channel).basicNack(81, false, true);
 
         assertThrows(IOException.class, () -> consumer.receive(deliveries, channel));
 
@@ -146,10 +156,11 @@ class MessageConsumerTest {
     /** Alte Zustellnummern dürfen nach einem Kanalfehler nicht weiter bestätigt werden. */
     @Test
     void propagatesChannelFailure() throws IOException {
-        Message first = message(51, validJson());
-        Message second = message(52, validJson());
+        Message first = message(51, VALID_JSON);
+        Message second = message(52, VALID_JSON);
         List<Message> deliveries = List.of(first, second);
-        doThrow(new IOException("Channel closed")).when(channel).basicAck(51, false);
+        IOException channelFailure = new IOException("Channel closed");
+        doThrow(channelFailure).when(channel).basicAck(51, false);
 
         assertThrows(IOException.class, () -> consumer.receive(deliveries, channel));
 
@@ -164,15 +175,5 @@ class MessageConsumerTest {
         properties.setDeliveryTag(deliveryTag);
         byte[] body = json.getBytes(StandardCharsets.UTF_8);
         return new Message(body, properties);
-    }
-
-    /** Der Vertrag enthält keine Java-Klassennamen. */
-    private String validJson() {
-        return """
-                {"id":"11111111-1111-4111-8111-111111111111",
-                 "roomId":"22222222-2222-4222-8222-222222222222",
-                 "senderId":"anna","senderName":"Anna Muster",
-                 "content":"Hallo","sentAt":"2026-09-29T08:00:00Z"}
-                """;
     }
 }

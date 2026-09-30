@@ -11,7 +11,7 @@ import static org.junit.jupiter.api.Assertions.assertInstanceOf;
 
 /**
  * Prüft den eigenständigen Start des Writers.
- * Der Dienst verarbeitet später Queue-Nachrichten und benötigt keinen Webserver.
+ * Der Dienst verarbeitet Queue-Nachrichten und benötigt keinen Webserver.
  */
 @SpringBootTest
 @Import({PostgresTestConfiguration.class, RabbitTestConfiguration.class})

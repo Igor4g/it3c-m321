@@ -44,9 +44,9 @@ class BatchWriteServiceIntegrationTest {
 
         batchWriteService.saveBatch(messages);
 
-        assertEquals(2, countMessages());
-        assertEquals(first, readMessage(first.id()));
-        assertEquals(second, readMessage(second.id()));
+        assertMessageCount(2);
+        assertStoredMessage(first);
+        assertStoredMessage(second);
     }
 
     /** Auch zwei gleiche IDs in derselben Lieferung dürfen keine zweite Zeile erzeugen. */
@@ -57,16 +57,19 @@ class BatchWriteServiceIntegrationTest {
 
         batchWriteService.saveBatch(messages);
 
-        assertEquals(1, countMessages());
-        assertEquals(message, readMessage(message.id()));
+        assertMessageCount(1);
+        assertStoredMessage(message);
     }
 
     /** Eine Wiederzustellung darf den zuerst gespeicherten Inhalt nicht überschreiben. */
     @Test
     void preservesExistingMessageOnRedelivery() {
         ChatMessage original = createMessage("Original");
-        ChatMessage changed = new ChatMessage(original.id(), UUID.randomUUID(),
-                "other", "Other Sender", "Changed", Instant.parse("2026-10-01T12:00:00Z"));
+        UUID originalId = original.id();
+        UUID otherRoomId = UUID.randomUUID();
+        Instant changedTime = Instant.parse("2026-10-01T12:00:00Z");
+        ChatMessage changed = new ChatMessage(originalId, otherRoomId,
+                "other", "Other Sender", "Changed", changedTime);
         ChatMessage next = createMessage("Next message");
         List<ChatMessage> firstBatch = List.of(original);
         List<ChatMessage> secondBatch = List.of(changed, next);
@@ -74,9 +77,9 @@ class BatchWriteServiceIntegrationTest {
         batchWriteService.saveBatch(firstBatch);
         batchWriteService.saveBatch(secondBatch);
 
-        assertEquals(2, countMessages());
-        assertEquals(original, readMessage(original.id()));
-        assertEquals(next, readMessage(next.id()));
+        assertMessageCount(2);
+        assertStoredMessage(original);
+        assertStoredMessage(next);
     }
 
     /** Eine absichtlich ungültige DB-Zeile muss auch vorherige Inserts der Lieferung zurückrollen. */
@@ -92,12 +95,12 @@ class BatchWriteServiceIntegrationTest {
         assertThrows(DataIntegrityViolationException.class,
                 () -> batchWriteService.saveBatch(failedBatch));
 
-        assertEquals(1, countMessages());
-        assertEquals(existing, readMessage(existing.id()));
+        assertMessageCount(1);
+        assertStoredMessage(existing);
         List<ChatMessage> retryBatch = List.of(valid);
         batchWriteService.saveBatch(retryBatch);
-        assertEquals(2, countMessages());
-        assertEquals(valid, readMessage(valid.id()));
+        assertMessageCount(2);
+        assertStoredMessage(valid);
     }
 
     /** Eine leere Lieferung benötigt keine Schreiboperation. */
@@ -107,7 +110,7 @@ class BatchWriteServiceIntegrationTest {
 
         batchWriteService.saveBatch(messages);
 
-        assertEquals(0, countMessages());
+        assertMessageCount(0);
     }
 
     /** Mikrosekunden sind in Java und PostgreSQL ohne Rundungsverlust vergleichbar. */
@@ -118,9 +121,17 @@ class BatchWriteServiceIntegrationTest {
         return new ChatMessage(id, roomId, "anna", "Anna Muster", content, sentAt);
     }
 
-    /** Zählt die nach COMMIT oder ROLLBACK tatsächlich sichtbaren Zeilen. */
-    private int countMessages() {
-        return jdbcTemplate.queryForObject("SELECT COUNT(*) FROM message", Integer.class);
+    /** Vergleicht die nach COMMIT oder ROLLBACK tatsächlich sichtbare Zeilenzahl. */
+    private void assertMessageCount(int expected) {
+        Integer actual = jdbcTemplate.queryForObject("SELECT COUNT(*) FROM message", Integer.class);
+        assertEquals(expected, actual);
+    }
+
+    /** Jeder Vergleich umfasst alle sechs Felder, ohne mehrstufige Aufrufe im Testablauf. */
+    private void assertStoredMessage(ChatMessage expected) {
+        UUID id = expected.id();
+        ChatMessage actual = readMessage(id);
+        assertEquals(expected, actual);
     }
 
     /** Liest ausdrücklich alle Felder, damit vertauschte SQL-Parameter auffallen. */

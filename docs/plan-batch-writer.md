@@ -479,3 +479,13 @@ früheren Vorzeigen der Spezifikation wird auf Wunsch des Lernenden nicht weiter
   drei ungültige Zeitpunkte landeten jeweils allein in der DLQ, ihre gültigen
   Nachbarn in der Tabelle. Der bestehende Ausfalltest blieb ebenfalls grün.
 - Befehl: `mvn -pl batch-writer -Dtest=MessageReaderTest,MessageConsumerIntegrationTest test`.
+
+### Nachprüfung 2 – Lesbarkeit
+
+- Feldzugriffe vor JDBC-Bindung, Testdatenaufbau und mehrstufige Assertions in
+  benannte Schritte aufgeteilt. Wiederkehrende DB-/Queue-Prüfungen haben kleine
+  Hilfsmethoden; keine neue Produktionsschicht eingeführt.
+- Drei überholte Zukunftsformulierungen in Klassenkommentaren berichtigt.
+- `mvn clean test` vom Projektstamm: **113 Tests**, 0 Fehler, 0 übersprungen
+  (14 Lehrertests und 99 Writer-Tests). Darunter die neue Zeitbereichsregression
+  und der echte 15-Sekunden-Datenbankausfall.

@@ -5,7 +5,7 @@ import org.springframework.boot.autoconfigure.SpringBootApplication;
 
 /**
  * Startpunkt des eigenständigen Schreibdienstes.
- * Queue-Verarbeitung und Datenbankzugriff werden schrittweise ergänzt.
+ * Spring verbindet den Queue-Consumer mit dem transaktionalen Datenbankzugriff.
  */
 @SpringBootApplication
 public class BatchWriterApplication {

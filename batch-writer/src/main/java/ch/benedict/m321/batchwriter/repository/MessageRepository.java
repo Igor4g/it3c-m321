@@ -7,9 +7,11 @@ import org.springframework.stereotype.Repository;
 
 import java.sql.PreparedStatement;
 import java.sql.SQLException;
+import java.time.Instant;
 import java.time.OffsetDateTime;
 import java.time.ZoneOffset;
 import java.util.List;
+import java.util.UUID;
 
 /** Kapselt den SQL-Schreibweg; vorhandene IDs bleiben bei Wiederzustellung unverändert. */
 @Repository
@@ -32,12 +34,18 @@ public class MessageRepository {
 
     /** Parameterbindung trennt Chat-Inhalte vom SQL und erhält die ursprünglichen Feldwerte. */
     private void bindMessage(PreparedStatement statement, ChatMessage message) throws SQLException {
-        OffsetDateTime sentAt = OffsetDateTime.ofInstant(message.sentAt(), ZoneOffset.UTC);
-        statement.setObject(1, message.id());
-        statement.setObject(2, message.roomId());
-        statement.setString(3, message.senderId());
-        statement.setString(4, message.senderName());
-        statement.setString(5, message.content());
+        UUID id = message.id();
+        UUID roomId = message.roomId();
+        String senderId = message.senderId();
+        String senderName = message.senderName();
+        String content = message.content();
+        Instant timestamp = message.sentAt();
+        OffsetDateTime sentAt = OffsetDateTime.ofInstant(timestamp, ZoneOffset.UTC);
+        statement.setObject(1, id);
+        statement.setObject(2, roomId);
+        statement.setString(3, senderId);
+        statement.setString(4, senderName);
+        statement.setString(5, content);
         statement.setObject(6, sentAt);
     }
 }

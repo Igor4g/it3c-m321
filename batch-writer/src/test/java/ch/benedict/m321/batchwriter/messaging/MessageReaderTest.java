@@ -45,12 +45,9 @@ class MessageReaderTest {
         UUID expectedId = UUID.fromString("11111111-1111-4111-8111-111111111111");
         UUID expectedRoomId = UUID.fromString("22222222-2222-4222-8222-222222222222");
         Instant expectedTime = Instant.parse("2026-09-29T08:00:00Z");
-        assertEquals(expectedId, message.id());
-        assertEquals(expectedRoomId, message.roomId());
-        assertEquals("anna", message.senderId());
-        assertEquals("Anna Muster", message.senderName());
-        assertEquals("Hallo zusammen", message.content());
-        assertEquals(expectedTime, message.sentAt());
+        ChatMessage expected = new ChatMessage(expectedId, expectedRoomId,
+                "anna", "Anna Muster", "Hallo zusammen", expectedTime);
+        assertEquals(expected, message);
     }
 
     /** Übliche Schreibweisen des JSON-Content-Types dürfen keine Ablehnung auslösen. */
@@ -62,7 +59,8 @@ class MessageReaderTest {
 
         ChatMessage message = messageReader.read(body, contentType);
 
-        assertEquals("Hallo zusammen", message.content());
+        String content = message.content();
+        assertEquals("Hallo zusammen", content);
     }
 
     /** Umlaute, Zeilenumbrüche und vollständige Unicode-Zeichen bleiben unverändert. */
@@ -73,7 +71,8 @@ class MessageReaderTest {
 
         ChatMessage message = messageReader.read(body, "application/json");
 
-        assertEquals("Grüezi\nZusammen 👋", message.content());
+        String content = message.content();
+        assertEquals("Grüezi\nZusammen 👋", content);
     }
 
     /** Ein zusätzlicher Wert soll ältere Consumer nicht an der Verarbeitung hindern. */
@@ -83,7 +82,8 @@ class MessageReaderTest {
 
         ChatMessage message = messageReader.read(body, "application/json");
 
-        assertEquals("Hallo zusammen", message.content());
+        String content = message.content();
+        assertEquals("Hallo zusammen", content);
     }
 
     /** Unterschiedliche Zeitzonenangaben können denselben Zeitpunkt beschreiben. */
@@ -94,7 +94,8 @@ class MessageReaderTest {
 
         ChatMessage message = messageReader.read(body, "application/json");
 
-        assertEquals(expectedTime, message.sentAt());
+        Instant actualTime = message.sentAt();
+        assertEquals(expectedTime, actualTime);
     }
 
     /** Pflichtfelder dürfen auch bei direkter Veröffentlichung auf die Queue nicht fehlen. */
@@ -261,7 +262,8 @@ class MessageReaderTest {
 
         ChatMessage message = messageReader.read(body, "application/json");
 
-        assertEquals("  Hallo zusammen  ", message.content());
+        String content = message.content();
+        assertEquals("  Hallo zusammen  ", content);
     }
 
     /** Ändert gezielt ein Vertragsfeld; der Rest bleibt eine gültige Nachricht. */

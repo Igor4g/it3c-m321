@@ -2,7 +2,7 @@ package ch.benedict.m321.batchwriter.messaging;
 
 /**
  * Kennzeichnet eine Nachricht, deren unveränderter Inhalt nicht verarbeitet werden kann.
- * Der Consumer kann diesen Datenfehler später von einem Datenbankausfall unterscheiden.
+ * Der Consumer unterscheidet damit Datenfehler für die DLQ von wiederholbaren DB-Fehlern.
  */
 public class InvalidMessageException extends RuntimeException {
 

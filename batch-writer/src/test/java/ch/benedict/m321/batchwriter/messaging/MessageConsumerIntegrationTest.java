@@ -51,6 +51,8 @@ import static org.mockito.Mockito.*;
 @Import({PostgresTestConfiguration.class, RabbitTestConfiguration.class})
 class MessageConsumerIntegrationTest {
 
+    private static final Duration QUEUE_TIMEOUT = Duration.ofSeconds(10);
+
     @Autowired
     private RabbitTemplate rabbitTemplate;
     @Autowired
@@ -142,8 +144,10 @@ class MessageConsumerIntegrationTest {
         List<List<ChatMessage>> savedBatches = batches.getAllValues();
         List<ChatMessage> firstBatch = savedBatches.get(0);
         List<ChatMessage> remainder = savedBatches.get(1);
-        assertEquals(100, firstBatch.size());
-        assertEquals(3, remainder.size());
+        int firstBatchSize = firstBatch.size();
+        int remainderSize = remainder.size();
+        assertEquals(100, firstBatchSize);
+        assertEquals(3, remainderSize);
     }
 
     /** Die DLQ erhält nur den fehlerhaften Body; beide gültigen Nachbarn bleiben erhalten. */
@@ -246,15 +250,16 @@ class MessageConsumerIntegrationTest {
         long startedAt = System.nanoTime();
         Set<UUID> expectedIds = sendDuringDatabaseOutage(startedAt);
         awaitDatabaseRecovery(startedAt);
-        assertTrue(listener.isRunning());
+        boolean listenerRunning = listener.isRunning();
+        assertTrue(listenerRunning);
         MessageListenerContainer currentListener = listenerRegistry.getListenerContainer("batch-writer");
         assertSame(listener, currentListener);
         List<UUID> storedIds = jdbcTemplate.queryForList("SELECT id FROM message", UUID.class);
         Set<UUID> actualIds = new HashSet<>(storedIds);
         assertEquals(expectedIds, actualIds);
         listener.stop();
-        assertEquals(0, queueSize(RabbitConfig.PERSIST_QUEUE));
-        assertEquals(0, queueSize(RabbitConfig.DEAD_LETTER_QUEUE));
+        assertQueueSize(RabbitConfig.PERSIST_QUEUE, 0);
+        assertQueueSize(RabbitConfig.DEAD_LETTER_QUEUE, 0);
         long totalMillis = elapsedMillis(startedAt);
         assertTrue(totalMillis < 90000, "Recovery must finish within 90 seconds");
         System.out.printf("Database outage test: 300 messages recovered in %d ms, no writer restart%n", totalMillis);
@@ -268,7 +273,7 @@ class MessageConsumerIntegrationTest {
         try {
             dockerClient.stopContainerCmd(containerId).withTimeout(1).exec();
             Set<UUID> expectedIds = sendOutageMessages();
-            await().atMost(Duration.ofSeconds(10)).untilAsserted(() ->
+            await().atMost(QUEUE_TIMEOUT).untilAsserted(() ->
                     verify(batchWriteService, atLeast(2)).saveBatch(anyList()));
             assertRetainedMessagesDuringOutage();
             long elapsedMillis = elapsedMillis(startedAt);
@@ -298,7 +303,8 @@ class MessageConsumerIntegrationTest {
     private void awaitDatabaseRecovery(long startedAt) {
         long remainingMillis = 90000 - elapsedMillis(startedAt);
         assertTrue(remainingMillis > 0, "Recovery must finish within 90 seconds");
-        await().atMost(Duration.ofMillis(remainingMillis))
+        Duration recoveryTimeout = Duration.ofMillis(remainingMillis);
+        await().atMost(recoveryTimeout)
                 .ignoreExceptionsMatching(exception -> exception instanceof DataAccessException)
                 .untilAsserted(() -> {
                     Integer count = jdbcTemplate.queryForObject("SELECT COUNT(*) FROM message", Integer.class);
@@ -310,7 +316,8 @@ class MessageConsumerIntegrationTest {
     private void assertRetainedMessagesDuringOutage() throws Exception {
         Container.ExecResult result = rabbitContainer.execInContainer("rabbitmqctl", "-q", "list_queues",
                 "name", "messages", "messages_unacknowledged", "--formatter=json");
-        assertEquals(0, result.getExitCode());
+        int exitCode = result.getExitCode();
+        assertEquals(0, exitCode);
         String output = result.getStdout();
         ObjectMapper mapper = new ObjectMapper();
         JsonNode queues = mapper.readTree(output);
@@ -339,25 +346,26 @@ class MessageConsumerIntegrationTest {
 
     /** Nach dem Stop wären unbestätigte Lieferungen wieder bereit: die leere Queue belegt ACKs. */
     private void consumeAndCheck(int deliveries, int storedMessages, int deadLetters) {
-        await().atMost(Duration.ofSeconds(10)).untilAsserted(() ->
-                assertEquals(deliveries, queueSize(RabbitConfig.PERSIST_QUEUE)));
+        await().atMost(QUEUE_TIMEOUT).untilAsserted(() ->
+                assertQueueSize(RabbitConfig.PERSIST_QUEUE, deliveries));
         listener.start();
-        await().atMost(Duration.ofSeconds(10)).untilAsserted(() -> {
+        await().atMost(QUEUE_TIMEOUT).untilAsserted(() -> {
             Integer count = jdbcTemplate.queryForObject("SELECT COUNT(*) FROM message", Integer.class);
             assertEquals(storedMessages, count);
-            assertEquals(0, queueSize(RabbitConfig.PERSIST_QUEUE));
-            assertEquals(deadLetters, queueSize(RabbitConfig.DEAD_LETTER_QUEUE));
+            assertQueueSize(RabbitConfig.PERSIST_QUEUE, 0);
+            assertQueueSize(RabbitConfig.DEAD_LETTER_QUEUE, deadLetters);
         });
         listener.stop();
-        assertEquals(0, queueSize(RabbitConfig.PERSIST_QUEUE));
-        assertEquals(deadLetters, queueSize(RabbitConfig.DEAD_LETTER_QUEUE));
+        assertQueueSize(RabbitConfig.PERSIST_QUEUE, 0);
+        assertQueueSize(RabbitConfig.DEAD_LETTER_QUEUE, deadLetters);
     }
 
-    /** Passive Queue-Abfragen zählen bereitliegende Nachrichten ohne sie zu konsumieren. */
-    private int queueSize(String queueName) {
+    /** Prüft bereitliegende Nachrichten, ohne sie durch die Messung zu konsumieren. */
+    private void assertQueueSize(String queueName, int expected) {
         QueueInformation information = rabbitAdmin.getQueueInfo(queueName);
         assertNotNull(information);
-        return information.getMessageCount();
+        int actual = information.getMessageCount();
+        assertEquals(expected, actual);
     }
 
     /** send statt convertAndSend stellt sicher, dass der Test keine Typheader ergänzt. */
