@@ -2,11 +2,12 @@
 
 **M321 · Bewertung 1 · Stand 29.09.2026**
 
-**Status: Vor Beginn der Implementierung erstellt; Umsetzung begonnen, Abnahme ausstehend.**
-Dieses Dokument beschreibt das Soll-Verhalten. Die Abnahmeszenarien sind noch
-nicht ausgeführt. Die Lehrperson hat laut Rückmeldung des Lernenden zur Weiterarbeit aufgefordert.
-Eine formelle Freigabe ist nicht vorgeschrieben. Der Umsetzungsplan wird separat vor dem Code
-festgehalten; ein Vorzeigen oder eine Lehrerrückmeldung wird nicht als bereits erfolgt behauptet.
+**Status: Vor der Implementierung erstellt; umgesetzt und S1–S8 am 29.09.2026 selbst geprüft.**
+Dieses Dokument beschreibt das Soll-Verhalten; die gemessenen Ergebnisse stehen im
+[Abnahmebericht](abnahme-batch-writer.md). Spezifikation und Umsetzungsplan wurden
+in dieser Reihenfolge vor dem Code separat committet. Die Lehrperson hatte laut
+Rückmeldung des Lernenden zur Weiterarbeit aufgefordert; ein Vorzeigen oder eine
+formelle Lehrerrückmeldung wird nicht als bereits erfolgt behauptet.
 
 ## 1. Zweck und Abgrenzung
 
@@ -67,7 +68,8 @@ Belege im vorhandenen Dienst:
 
 Der Writer liest den JSON-Body in einen eigenen Daten-record. Es gibt keine
 Abhängigkeit auf die Java-Klassen des chat-service und kein gemeinsames DTO-Modul.
-Ein Integrationstest muss zusätzlich das tatsächlich erzeugte Publisher-JSON lesen.
+Die Compose-Abnahme über POST /messages prüft zusätzlich das tatsächlich
+erzeugte Publisher-JSON auf dem vollständigen Weg bis in die Datenbank.
 
 ### 2.2 Inhalt
 
@@ -300,10 +302,10 @@ neue Raum-UUID; geprüft werden die tatsächlich zurückgegebenen Nachrichten-ID
 Dadurch stören Datensätze vorheriger Szenarien nicht.
 
 Die folgenden Befehle beschreiben die eigene Abnahme, nicht das unbekannte
-Prüfskript des Lehrers. Die Hilfsfunktionen und S3–S7 wurden am 29.09.2026 am
-lokalen Compose-Stack erprobt und dabei korrigiert. Messergebnisse stehen in
-[abnahme-batch-writer.md](abnahme-batch-writer.md). Die vollständige Abfolge
-S1–S8 auf einem frischen Klon steht noch aus.
+Prüfskript des Lehrers. Die Hilfsfunktionen wurden am lokalen Compose-Stack
+erprobt und korrigiert; die vollständige eigene Abnahme S1–S8 wurde anschliessend
+am 29.09.2026 auf einem frischen lokalen Klon geprüft. Messergebnisse stehen in
+[abnahme-batch-writer.md](abnahme-batch-writer.md).
 Voraussetzung für die Beispiele: PowerShell 7, Java 21, Maven und laufendes Docker.
 Befehle im Projektstamm ausführen. SQL und HTTP bleiben innerhalb von Docker.
 

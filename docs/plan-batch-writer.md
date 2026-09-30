@@ -239,7 +239,7 @@ Keine automatische Nachricht an die Lehrperson versenden.
 Termin für das fertige Projekt: **02.10.2026, 23:59 Uhr**.
 Das spätere Code-Review ist ein eigener Termin.
 
-- [ ] Schritt umgesetzt und geprüft.
+- [x] Schritt umgesetzt und geprüft (29.09.2026).
 
 ## Prüfprotokoll
 
@@ -420,3 +420,30 @@ werden zusammen mit dem jeweiligen Umsetzungsschritt ergänzt.
   in docs/abnahme-batch-writer.md. Keine Daten zwischen den Szenarien gelöscht.
 - Der lokale Stack bleibt mit zwei Writern gestartet. Frischer Klon,
   vollständige Abfolge S1–S8, Schlussreview und Abgabe bleiben Schritt 8.
+
+### Schritt 8 – tatsächliche Ergebnisse vom 29.09.2026
+
+- Alle sechs Seiten des Lehrerauftrags erneut mit Projekt und Abgaben abgeglichen.
+  Das Lehrer-Repository steht weiterhin auf f8ea557; keine zusätzlichen Ausgangsdateien.
+- Frischen lokalen Git-Klon von 4b55c19 erstellt; ausschliesslich versionierte Dateien,
+  eigene .env nur aus .env.example. Vorherigen Compose-Stack ohne Volume-Löschung
+  beendet; der Prüfstack startete mit neuen leeren Volumes und derselben Konfiguration.
+- S1: mvn clean test im Klon, 99 Tests ohne Fehler oder übersprungene Tests.
+- S2: vier Dienste laufen, Schema und Index automatisch vorhanden,
+  PortBindings bei allen Diensten leer. Kein manuelles SQL-Setup.
+- S3–S7: dokumentierte Blöcke auf demselben Prüfstack in Reihenfolge ausgeführt,
+  ohne Datenbereinigung. 3301 Zeilen am Ende und beide Queues vollständig leer.
+  S4: 20 Transaktionen; S7: alle 300 IDs in 27,69 s einschliesslich zusätzlicher
+  Schlussprüfungen, beide Writer-Prozesse unverändert.
+- S8: keine Streams; Klassen-/Methodenkommentare und Verantwortlichkeiten gelesen;
+  englische Namen/Logs, deutsche Erklärungen, keine getrackte .env oder tempContext.
+  Git-Historie belegt Spezifikation und Plan vor der Implementierung.
+- Die Abschlussänderungen betreffen nur Dokumentation. Der bereits geprüfte
+  Anwendungscode, die Tests, Dockerfiles und Compose-Konfiguration bleiben gleich.
+- README um eine kurze Klassenübersicht ergänzt; Spezifikation und Abnahmebericht
+  auf den tatsächlich abgeschlossenen Prüfstand gebracht.
+- Prüfstack anschliessend beendet, ursprünglichen Arbeitsstack mit erhaltenen
+  Daten und zwei Writern wieder gestartet. Keine Volumes gelöscht.
+- Veröffentlichung: main und bewertung-1 kennzeichnen den abschliessend dokumentierten
+  Stand im eigenen Fork. Den Fork-Link reicht der Lernende selbst im Abgabeportal ein;
+  es wird keine Nachricht an die Lehrperson versendet.

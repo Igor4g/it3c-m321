@@ -21,6 +21,11 @@ docker-compose gestartet werden.
 
 Alle Aufgaben werden in **deinem Fork** gelöst. Das Original-Repository bleibt die Referenz.
 
+Bewertung 1 ist implementiert und die eigene Abnahme S1–S8 wurde am 29.09.2026
+auf einem frischen lokalen Klon durchgeführt. Der Abgabestand ist über den Tag
+[`bewertung-1`](https://github.com/Igor4g/it3c-m321/tree/bewertung-1) erreichbar.
+Das spätere Code-Review-Gespräch ist ein eigener Bewertungsteil.
+
 ## Bauen, testen, starten
 
 ```bash
@@ -89,11 +94,11 @@ erreichbar.
 
 ## Dokumente
 
-- [`docs/abnahme-batch-writer.md`](docs/abnahme-batch-writer.md) — gemessene Ergebnisse für Last, Duplikate, Skalierung und DB-Ausfall; vollständige Schlussabnahme noch offen.
+- [`docs/abnahme-batch-writer.md`](docs/abnahme-batch-writer.md) — vollständige eigene Abnahme S1–S8, Messwerte und dokumentierte Prüfkorrekturen.
 
 - [`docs/plan-batch-writer.md`](docs/plan-batch-writer.md) — Umsetzung in kleinen Schritten mit Tests und eigenständigen Commits.
 
-- [`docs/spec-batch-writer.md`](docs/spec-batch-writer.md) — Spezifikation für Bewertung 1; Abnahme noch ausstehend.
+- [`docs/spec-batch-writer.md`](docs/spec-batch-writer.md) — Vertrag, Fehlerverhalten und ausführbare Abnahmekommandos für Bewertung 1.
 
 - [`PLANUNG.md`](PLANUNG.md) — Auftrag, Stack, Architektur, Nachrichtenfluss, Queues, Datenmodell,
   Umsetzungsreihenfolge des Gesamtprojekts. Für Bewertung 1 gelten der Lehrerauftrag
@@ -105,6 +110,26 @@ erreichbar.
 - [`CLAUDE.md`](CLAUDE.md) — Codestil-Regeln für dieses Projekt. Gelten auch für dich.
 - [`docs/flipchart-chat-app.png`](docs/flipchart-chat-app.png) — das Flipchart aus der Lektion,
   von dem die Planung ausgeht.
+
+## Aufbau des Writers
+
+Der Ablauf ist: Queue → MessageConsumer → MessageReader → BatchWriteService →
+MessageRepository → PostgreSQL. Erst nach erfolgreichem COMMIT bestätigt der
+Consumer die betreffenden Nachrichten an RabbitMQ.
+
+| Datei unter batch-writer/src/main | Verantwortung |
+|---|---|
+| java/.../messaging/MessageConsumer.java | Lieferungen prüfen lassen, speichern, ACK/NACK und Wiederzustellung steuern |
+| java/.../messaging/MessageReader.java | JSON und die sechs Vertragsfelder prüfen |
+| java/.../messaging/InvalidMessageException.java | Dauerhafte Datenfehler von technischen DB-Fehlern unterscheiden |
+| java/.../dto/ChatMessage.java | Die geprüften Nachrichtenwerte als record transportieren |
+| java/.../service/BatchWriteService.java | Eine Transaktion je nicht leerem Batch abgrenzen |
+| java/.../repository/MessageRepository.java | Parametrisiertes SQL mit Schutz vor doppelten IDs ausführen |
+| java/.../config/RabbitConfig.java und BatchProperties.java | Queues, Batch-Grenzen und Retry-Pause konfigurieren |
+| resources/schema.sql und application.yml | Datenmodell und Verbindungseinstellungen festlegen |
+
+Der Writer hat keine HTTP-Schnittstelle und keine View. Deshalb reichen diese
+Zuständigkeiten ohne zusätzliche Router, Interfaces oder ein eigenes Batch-Framework.
 
 ## Codestil, kurz
 

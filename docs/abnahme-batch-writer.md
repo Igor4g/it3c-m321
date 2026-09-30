@@ -1,12 +1,44 @@
 # Batch-Writer: gemessene Abnahmeergebnisse
 
-Stand: 29.09.2026, Schritt 7. Geprüfter Anwendungscode und Compose-Konfiguration:
-Commit `36eb6aebad688be193aa0a51ee3209cfc7c49929`.
-Die anschliessenden Änderungen betreffen nur Prüfbefehle und Dokumentation.
+Stand: 29.09.2026, eigene Schlussabnahme S1–S8 abgeschlossen.
+Abschlussdokumentation: 30.09.2026.
+Geprüfter frischer lokaler Klon: Commit `4b55c19`.
+Anwendungscode und Compose-Konfiguration sind seit `36eb6ae` unverändert;
+der abschliessende Abgabecommit ergänzt ausschliesslich Dokumentation.
 
 Dies ist die eigene Prüfung anhand des Lehrerauftrags. Das unbekannte Prüfskript
-des Lehrers wurde nicht ausgeführt. Eine vollständige Schlussabnahme S1–S8 auf
-einem frischen Klon und das Code-Review-Gespräch sind noch offen.
+des Lehrers wurde nicht ausgeführt. Das Code-Review-Gespräch und die Einreichung
+des Fork-Links durch den Lernenden sind separate Schritte.
+
+## Schlussabnahme auf frischem Klon
+
+Der lokale Klon wurde mit git clone --no-local erstellt: keine unversionierten
+Dateien, keine übernommene .env und keine Build-Ergebnisse. .env wurde nur aus
+.env.example kopiert. Der ursprüngliche Arbeitsstack wurde ohne Löschen seiner
+Daten beendet. Der Prüfstack erhielt neue leere Volumes; Ausgangszustand:
+0 Zeilen, beide Queues leer. Anschliessend S3–S7 in Reihenfolge, ohne Bereinigung.
+
+| Szenario | Ergebnis der Schlussabnahme |
+|---|---|
+| S1 | mvn clean test vom Klon-Projektstamm: 99 Tests, 0 Fehler, 0 übersprungen |
+| S2 | docker compose up -d --build erfolgreich; vier Dienste laufen, keine PortBindings; Tabelle und beide Indizes automatisch vorhanden |
+| S3 | Alle 1000 IDs genau einmal; Queue leer; gesamte Sendung samt Prüfung 9,42 s |
+| S4 | Rückstau 1000 ready/0 unacknowledged/0 Consumer; alle IDs gespeichert; Statistik 68 → 88, also 20 Transaktionen bei höchstens 100 erlaubt |
+| S5 | Identischer JSON-Body zweimal ohne Java-Typheader: eine Zeile, alle sechs Felder unverändert, DLQ leer |
+| S6 | Zwei Consumer; 1000 IDs ohne Duplikate; laut Logs je 500 Nachrichten verarbeitet |
+| S7 | PostgreSQL nach 15 s gestartet; 300 Nachrichten während des Ausfalls in 3,34 s gesendet; alle IDs samt Schlussprüfungen nach 27,69 s; beide Writer-Prozesse unverändert |
+| S8 | Keine Streams; deutsche Kommentare über Klassen und Methoden geprüft; englische Namen/Logs; lokale .env und tempContext ignoriert; Planungshistorie vorhanden |
+
+Endzustand: **3301 Zeilen**, chat.persist und chat.dlq jeweils 0 ready und
+0 unacknowledged. Bei S7 waren Container-ID, StartedAt und RestartCount beider
+Writer vor/nach dem Ausfall identisch. Keine manuellen Writer-Neustarts bei S7.
+Die abschliessende Dokumentation verändert weder Anwendungscode noch Prüflogik.
+
+Danach wurde der Prüfstack ohne Löschen seiner Volumes beendet und der ursprüngliche
+Arbeitsstack mit zwei Writern und seinen vorherigen Daten wieder gestartet.
+Der veröffentlichte Abgabestand wird durch den Tag bewertung-1 gekennzeichnet.
+
+Die folgenden Abschnitte erhalten die früheren Messwerte und Korrekturen aus Schritt 7.
 
 ## Umgebung und Vorgehen
 
@@ -27,7 +59,7 @@ Die ausführbaren Befehle und Hilfsfunktionen stehen in
 Lokale Rohprotokolle und ID-Listen liegen in der ignorierten tempContext;
 sie sind für den Start und die Wiederholung der dokumentierten Befehle nicht erforderlich.
 
-## Ergebnisse
+## Vorprüfung aus Schritt 7
 
 | Szenario und Befehl | Soll | Gemessen | Ergebnis |
 |---|---|---|---|
@@ -81,15 +113,17 @@ wurde S4 mit neuen 1000 Nachrichten vollständig wiederholt.
 
 Keine dieser Korrekturen erforderte eine Änderung des Anwendungscodes.
 
-## Bereits geprüft und noch offen
+## Einordnung der Prüfungen
 
 - Schritt 6: mvn clean test vom Projektstamm, 99 Tests ohne Fehler/Überspringen;
   Docker-Build, Schema/Index, keine Host-Portbindungen und Datenbestand nach
   Containerneuerstellung erfolgreich geprüft.
 - Schritt 7: S3–S7 wie oben gemessen. Da nur Dokumentation und Prüfbefehle geändert
   wurden, wurden die unveränderten Java-Tests nicht erneut gestartet.
-- Offen: frischer Klon, vollständige Reihenfolge S1–S8 ohne Zwischenbereinigung,
-  abschliessender Abgleich mit dem Lehrerauftrag und Code-Stil, Veröffentlichung
-  des geprüften main-Stands und Tag bewertung-1.
+- Schritt 8: frischer lokaler Klon und vollständige eigene Abnahme wie oben;
+  Lehrerauftrag, Code-Stil, Spezifikation und README abschliessend abgeglichen.
+  Alle vier geforderten Abgaben sind vorhanden: Spezifikation, Plan, Code, Tests.
+- Der Lernende reicht den Fork-Link selbst im Abgabeportal ein. Die Beurteilung
+  durch das Lehrerskript und die Punktevergabe erfolgen durch die Lehrperson.
 - Die Vorbereitung auf das spätere Code-Review-Gespräch folgt nach Fertigstellung
   des Abgabeprojekts. Die gemessenen Ergebnisse ersetzen dieses Gespräch nicht.
