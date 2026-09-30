@@ -11,6 +11,8 @@ import com.github.dockerjava.api.DockerClient;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.ValueSource;
 import org.mockito.ArgumentCaptor;
 import org.springframework.amqp.core.AmqpAdmin;
 import org.springframework.amqp.core.Message;
@@ -33,6 +35,8 @@ import org.testcontainers.containers.RabbitMQContainer;
 
 import java.nio.charset.StandardCharsets;
 import java.time.Duration;
+import java.time.Instant;
+import java.time.OffsetDateTime;
 import java.util.List;
 import java.util.UUID;
 import java.util.HashSet;
@@ -161,6 +165,52 @@ class MessageConsumerIntegrationTest {
         byte[] body = deadLetter.getBody();
         String json = new String(body, StandardCharsets.UTF_8);
         assertEquals("{}", json);
+    }
+
+    /** Ein nicht speicherbarer Zeitpunkt gehört allein in die DLQ, nicht in eine Retry-Schleife. */
+    @ParameterizedTest
+    @ValueSource(strings = {"+300000-01-01T00:00:00Z", "-4713-12-31T23:59:59.999999Z",
+            "+294276-12-31T23:59:59.999999500Z"})
+    void deadLettersUnstorableTimestampAndPersistsNeighbours(String timestamp) {
+        UUID firstId = UUID.randomUUID();
+        UUID invalidId = UUID.randomUUID();
+        UUID secondId = UUID.randomUUID();
+        Message first = validMessage(firstId);
+        Message invalid = messageWithTimestamp(invalidId, timestamp);
+        Message second = validMessage(secondId);
+        send(first);
+        send(invalid);
+        send(second);
+
+        consumeAndCheck(3, 2, 1);
+
+        List<UUID> storedIds = jdbcTemplate.queryForList("SELECT id FROM message", UUID.class);
+        Set<UUID> actualIds = new HashSet<>(storedIds);
+        Set<UUID> expectedIds = Set.of(firstId, secondId);
+        assertEquals(expectedIds, actualIds);
+        Message deadLetter = rabbitTemplate.receive(RabbitConfig.DEAD_LETTER_QUEUE);
+        assertNotNull(deadLetter);
+        byte[] expectedBody = invalid.getBody();
+        byte[] actualBody = deadLetter.getBody();
+        assertArrayEquals(expectedBody, actualBody);
+    }
+
+    /** Die Reader-Grenzen müssen auch über den echten JDBC-Treiber verlustfrei speicherbar sein. */
+    @ParameterizedTest
+    @ValueSource(strings = {"-4712-01-01T00:00:00Z", "+294276-12-31T23:59:59.999999Z"})
+    void persistsTimestampAtStorageBoundary(String timestamp) {
+        UUID id = UUID.randomUUID();
+        Message message = messageWithTimestamp(id, timestamp);
+        send(message);
+
+        consumeAndCheck(1, 1, 0);
+
+        OffsetDateTime storedTime = jdbcTemplate.queryForObject(
+                "SELECT sent_at FROM message WHERE id = ?", OffsetDateTime.class, id);
+        assertNotNull(storedTime);
+        Instant actualTime = storedTime.toInstant();
+        Instant expectedTime = Instant.parse(timestamp);
+        assertEquals(expectedTime, actualTime);
     }
 
     /** Ein vollständig ungültiger Batch darf keine leere DB-Transaktion auslösen. */
@@ -317,11 +367,16 @@ class MessageConsumerIntegrationTest {
 
     /** Feste Felder und eine frei wählbare ID erlauben gezielte Duplikatprüfungen. */
     private Message validMessage(UUID id) {
+        return messageWithTimestamp(id, "2026-09-29T08:00:00Z");
+    }
+
+    /** Erlaubt gezielte Zeitgrenzen, ohne die übrigen Vertragsfelder zu verändern. */
+    private Message messageWithTimestamp(UUID id, String timestamp) {
         String json = """
                 {"id":"%s","roomId":"22222222-2222-4222-8222-222222222222",
                  "senderId":"anna","senderName":"Anna Muster",
-                 "content":"Hallo","sentAt":"2026-09-29T08:00:00Z"}
-                """.formatted(id);
+                 "content":"Hallo","sentAt":"%s"}
+                """.formatted(id, timestamp);
         return jsonMessage(json);
     }
 

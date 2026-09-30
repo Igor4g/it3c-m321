@@ -80,13 +80,26 @@ erzeugte Publisher-JSON auf dem vollständigen Weg bis in die Datenbank.
 | `senderId` | String | Pflichtfeld, nicht leer/blank; unverändert übernehmen |
 | `senderName` | String | Pflichtfeld, nicht leer/blank; unverändert übernehmen |
 | `content` | String | Pflichtfeld, nicht leer/blank; Zeilenumbrüche und Umlaute zulässig |
-| `sentAt` | String | Pflichtfeld, ISO-8601-Zeitpunkt mit Zeitzone, in Java als Instant lesbar |
+| `sentAt` | String | Pflichtfeld, ISO-8601-Zeitpunkt mit Zeitzone, als Instant im unten festgelegten Speicherbereich lesbar |
 
 Zusätzliche JSON-Felder werden ignoriert. Fehlende/null-Felder, falsche Feldtypen,
 ungültiges JSON und ungültige UUIDs/Zeitpunkte werden abgelehnt. Texte müssen
 gültigen Unicode enthalten; U+0000 wird abgelehnt, weil PostgreSQL es in Textspalten
 nicht speichern kann. Es wird keine zusätzliche fachliche Maximallänge erfunden,
 die der vorhandene Producer nicht vorgibt. Broker- und Speichergrenzen bleiben bestehen.
+
+Für `sentAt` gilt einschliesslich beider Grenzen der UTC-Bereich
+`-4712-01-01T00:00:00Z` bis `+294276-12-31T23:59:59.999999Z`.
+Die untere Grenze entspricht 4713 vor Christus: Der verwendete JDBC-Treiber
+wandelt frühere OffsetDateTime-Werte in `-infinity` um. Die obere Grenze ist die
+letzte endliche Mikrosekunde von PostgreSQL. Werte darüber werden vor JDBC abgelehnt, damit
+auch eine Rundung auf Mikrosekunden nicht in das nächste, unzulässige Jahr führt.
+Java kann weiter entfernte Zeitpunkte lesen; diese sind für unseren Speichervertrag
+ungültig und gelangen einzeln in `chat.dlq`. Gültige Nachbarn bleiben verarbeitbar.
+Innerhalb des Bereichs bleibt die übliche Mikrosekundenrundung beim Speichern bestehen.
+[PostgreSQL 16: genaue Timestamp-Grenzen](https://github.com/postgres/postgres/blob/REL_16_STABLE/src/include/datatype/timestamp.h),
+[pgJDBC 42.7.11: Zeitkonvertierung](https://github.com/pgjdbc/pgjdbc/blob/REL42.7.11/pgjdbc/src/main/java/org/postgresql/jdbc/TimestampUtils.java),
+[Datentyp und Präzision](https://www.postgresql.org/docs/16/datatype-datetime.html).
 
 Beispiel eines Queue-Bodys, mit absichtlich fester ID für den Duplikattest:
 

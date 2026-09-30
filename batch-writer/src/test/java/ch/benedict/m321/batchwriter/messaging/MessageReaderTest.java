@@ -168,6 +168,33 @@ class MessageReaderTest {
         assertThrows(InvalidMessageException.class, () -> messageReader.read(body, "application/json"));
     }
 
+    /** Lesbare Java-Zeitpunkte dürfen keinen dauerhaft fehlschlagenden DB-Batch verursachen. */
+    @ParameterizedTest
+    @ValueSource(strings = {"+300000-01-01T00:00:00Z", "-4713-12-31T23:59:59.999999Z",
+            "-4713-11-24T00:00:00Z",
+            "+294277-01-01T00:00:00Z", "+294276-12-31T23:59:59.999999500Z",
+            "+1000000000-01-01T00:00:00Z", "-1000000000-01-01T00:00:00Z"})
+    void rejectsTimestampOutsideStorageRange(String value) throws Exception {
+        String jsonValue = "\"" + value + "\"";
+        byte[] body = withField("sentAt", jsonValue);
+
+        assertThrows(InvalidMessageException.class, () -> messageReader.read(body, "application/json"));
+    }
+
+    /** Die beiden endlichen Speichergrenzen bleiben als gültige Vertragswerte erhalten. */
+    @ParameterizedTest
+    @ValueSource(strings = {"-4712-01-01T00:00:00Z", "+294276-12-31T23:59:59.999999Z"})
+    void acceptsTimestampAtStorageBoundary(String value) throws Exception {
+        String jsonValue = "\"" + value + "\"";
+        byte[] body = withField("sentAt", jsonValue);
+        Instant expectedTime = Instant.parse(value);
+
+        ChatMessage message = messageReader.read(body, "application/json");
+
+        Instant actualTime = message.sentAt();
+        assertEquals(expectedTime, actualTime);
+    }
+
     /** Pro Nachricht ist genau ein vollständiges JSON-Objekt zulässig. */
     @ParameterizedTest
     @ValueSource(strings = {"", "   ", "{", "[]", "null", "42", "{} {}"})

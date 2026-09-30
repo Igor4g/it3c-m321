@@ -26,6 +26,10 @@ import java.util.UUID;
 @Component
 public class MessageReader {
 
+    // JDBC schreibt frühere Werte als -infinity; die obere Grenze schützt vor Rundungsüberlauf.
+    private static final Instant MINIMUM_TIMESTAMP = Instant.parse("-4712-01-01T00:00:00Z");
+    private static final Instant MAXIMUM_TIMESTAMP = Instant.parse("+294276-12-31T23:59:59.999999Z");
+
     private final ObjectMapper objectMapper;
 
     /** Ein zweites JSON-Objekt hinter der Nachricht darf nicht stillschweigend verschwinden. */
@@ -151,11 +155,15 @@ public class MessageReader {
         }
     }
 
-    /** Behält den Zeitpunkt des Producers bei, statt beim Schreiben eine neue Zeit zu vergeben. */
+    /** Nicht speicherbare Zeitpunkte dürfen keinen ganzen Batch dauerhaft blockieren. */
     private Instant readTimestamp(JsonNode root) {
         String value = readText(root, "sentAt");
         try {
-            return Instant.parse(value);
+            Instant timestamp = Instant.parse(value);
+            if (timestamp.isBefore(MINIMUM_TIMESTAMP) || timestamp.isAfter(MAXIMUM_TIMESTAMP)) {
+                throw new InvalidMessageException("Field 'sentAt' is outside the supported timestamp range");
+            }
+            return timestamp;
         } catch (DateTimeParseException exception) {
             throw new InvalidMessageException("Field 'sentAt' must be an ISO-8601 instant", exception);
         }

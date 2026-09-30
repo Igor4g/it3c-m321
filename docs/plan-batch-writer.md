@@ -447,3 +447,35 @@ werden zusammen mit dem jeweiligen Umsetzungsschritt ergänzt.
 - Veröffentlichung: main und bewertung-1 kennzeichnen den abschliessend dokumentierten
   Stand im eigenen Fork. Den Fork-Link reicht der Lernende selbst im Abgabeportal ein;
   es wird keine Nachricht an die Lehrperson versendet.
+
+## Nachprüfung und Korrekturen vom 30.09.2026
+
+Der zusätzliche Audit nach Schritt 8 hat einen fehlenden Speicherbereichstest
+für Zeitpunkte und kleine Stil-/Kommentarlücken gezeigt. Die ursprünglichen
+Schritte und Messungen bleiben als Verlauf erhalten.
+
+1. **Zeitbereich absichern:** Zuerst Reader-Regressionen, dann Bereichsprüfung;
+   echte Queue-/DB-Tests für ungültige Zeitpunkte neben gültigen Nachrichten sowie
+   beide erlaubten Grenzen. So wird der nachgewiesene dauerhafte Retry verhindert.
+2. **Lesbarkeit bereinigen:** Verschachtelte Berechnungen in benannte Schritte
+   aufteilen, drei veraltete Kommentare korrigieren; anschliessend Root-Testlauf.
+3. **Abgabeunterlagen abgleichen:** Alle versionierten Dateien prüfen, den
+   Gesamtentwurf als solchen kennzeichnen, README und Abnahme aktualisieren.
+   Erneute Compose-Abnahme S2–S8 auf frischem Klon des korrigierten Codes.
+
+Jedes Thema erhält einen eigenen deutschen Commit. Historische Planungsunterlagen
+werden nicht als aktueller Implementierungsstand ausgegeben. Die Frage nach dem
+früheren Vorzeigen der Spezifikation wird auf Wunsch des Lernenden nicht weiter bearbeitet.
+
+### Nachprüfung 1 – Zeitbereich
+
+- Reader-Regression vor der Korrektur ausgeführt: 71 Tests, davon sechs erwartete
+  Fehler, weil nicht speicherbare Zeitpunkte noch akzeptiert wurden.
+- Der erste echte Grenztest zeigte zusätzlich: pgJDBC wandelt Werte vor
+  4713 v. Chr. in -infinity um. Deshalb begrenzt der Reader den gemeinsamen
+  endlichen Wertebereich von Treiber und Datenbank, nicht nur den Java-Typ.
+- Nach Korrektur: 72 Reader-Tests und 13 Consumer-Integrationstests grün.
+  Beide gültigen Grenzen wurden über Queue und JDBC unverändert gespeichert;
+  drei ungültige Zeitpunkte landeten jeweils allein in der DLQ, ihre gültigen
+  Nachbarn in der Tabelle. Der bestehende Ausfalltest blieb ebenfalls grün.
+- Befehl: `mvn -pl batch-writer -Dtest=MessageReaderTest,MessageConsumerIntegrationTest test`.
