@@ -46,8 +46,10 @@ nicht zu Bewertung 1.
 
 Die Integrationstests benötigen einen laufenden Docker-Daemon. Für den Ausfalltest
 wird ein Testcontainer für 15 Sekunden gestoppt; der Compose-Stack bleibt unberührt.
-Die Suite umfasst **113 Tests**, einschliesslich Duplikaten, DB-Ausfall,
+Die Suite umfasst **115 Tests**, einschliesslich Duplikaten, DB-Ausfall,
 ungültigen Nachrichten neben gültigen sowie den Zeitgrenzen von JDBC/PostgreSQL.
+Zusätzliche Fehlertests prüfen Rollback nach dem SQL-Batch und Wiederzustellung
+bei Verbindungsabbruch zwischen COMMIT und ACK.
 
 Zwei Writer lassen sich ohne Änderungen am Code starten:
 

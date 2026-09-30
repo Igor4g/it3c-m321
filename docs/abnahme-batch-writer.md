@@ -2,7 +2,8 @@
 
 Stand: **30.09.2026**, erneute eigene Abnahme nach den Auditkorrekturen abgeschlossen.
 Geprüfter Code-Stand: **`bf36be7`**, einschliesslich Zeitbereichsprüfung aus `75ef9d9`.
-Die anschliessende Bereinigung der Abgabeunterlagen verändert nur Dokumentation.
+Die abschliessende Gegenprüfung ergänzt Tests und Nachweise;
+Anwendungscode und Compose-Konfiguration bleiben unverändert.
 
 Dies ist die eigene Prüfung anhand des Lehrerauftrags. Das unbekannte Prüfskript
 des Lehrers wurde nicht ausgeführt. Das Code-Review-Gespräch und die Einreichung
@@ -17,7 +18,7 @@ liefen in Reihenfolge auf demselben Stack, ohne Bereinigung dazwischen.
 
 | Szenario | Ergebnis nach der Korrektur |
 |---|---|
-| S1 | `mvn clean test`: **113 Tests**, 0 Fehler, 0 übersprungen; 14 im chat-service und 99 im Writer |
+| S1 | Abschliessendes `mvn clean test`: **115 Tests**, 0 Fehler, 0 übersprungen; 14 im chat-service und 101 im Writer |
 | S2 | Frischer Klon, `docker compose up -d --build`: vier laufende Dienste, keine Host-Portbindungen; Tabelle, Primärschlüssel und Raum/Zeit-Index automatisch vorhanden |
 | S3 | 1000 IDs genau einmal, Queue leer; Senden samt Prüfung **10,25 s**, Grenze 60 s |
 | S4 | Rückstau von 1000 Nachrichten vollständig gespeichert; **20 zusätzliche DB-Transaktionen**, Grenze 100 |
@@ -45,8 +46,44 @@ das Datenmodell in PLANUNG.md. Lokale Markdown-Verweise lösen auf, alle neun
 PowerShell-Blöcke der Spezifikation sind syntaktisch gültig. Build-Artefakte,
 Unterrichtsunterlagen und lokale Zugangsdaten werden nicht versioniert.
 
-Lokale Protokolle dieser Nachprüfung: submission-s1.log, submission-s2-build.log,
+Lokale Protokolle der ersten Nachprüfung: submission-s1.log (damals 113 Tests), submission-s2-build.log,
 submission-s3-s7.log und submission-s3.json bis submission-s7.json in tempContext.
+
+### Abschliessende Gegenprüfung vor der Lernphase
+
+Bei der erneuten Durchsicht wurden keine weiteren Fehler im Anwendungscode
+festgestellt. Zwei zuvor nicht direkt geprüfte Fehlerfenster sind jetzt als
+Integrationstests mit echten Containern abgesichert:
+
+- **Nach SQL, vor COMMIT:** Der Repository-Spy führt den echten JDBC-Batch aus
+  und löst danach einen Fehler aus. Die Service-Transaktion rollt beide Inserts
+  zurück. In einer separaten ignorierten Kopie ohne TransactionTemplate schlug
+  derselbe Test erwartungsgemäss fehl: zwei gespeicherte Zeilen statt null.
+  Damit erkennt der Test auch eine versehentlich entfernte Transaktionsgrenze.
+- **Nach COMMIT, vor ACK:** Der Service-Spy speichert tatsächlich und schliesst
+  dann einmal die echte RabbitMQ-Verbindung. Der Broker liefert erneut;
+  mindestens zwei Service-Aufrufe führen zu genau einer unveränderten Zeile,
+  anschliessend sind Schreibqueue und DLQ leer. Kein manueller Writer-Neustart.
+
+Im S7-Integrationstest beginnt die 15-Sekunden-Ausfallzeit nun erst nach der
+bestätigten Docker-Stop-Rückkehr. Vorher umfasste sie auch die Dauer des Stop-Befehls.
+Die oben gemessene Compose-Abnahme nutzte bereits den korrekten Startpunkt.
+
+Eine zusätzliche Prüfung mit dem Java-Parser fand Dokumentationskommentare für
+alle **16 Klassen/Records und 92 Methoden/Konstruktoren** im Writer samt Tests.
+Inhalt, Sprachregeln und Zuständigkeiten wurden zusätzlich gelesen; die reine
+Anwesenheit eines Kommentars ersetzt diese Prüfung nicht. Lokale Dokumentlinks,
+die neun PowerShell-Blöcke und die Ignore-Regeln wurden erneut kontrolliert.
+
+Der abschliessende Root-Lauf mit allen 115 Tests steht in final-audit-s1-final.log.
+Die gezielten Fehlerprüfungen, die absichtliche Gegenprobe ohne Transaktion und
+die Kommentarprüfung stehen in final-audit-fault-windows.log,
+final-audit-mutation.log und final-audit-comments.log, jeweils lokal in tempContext.
+S2–S7 wurden in dieser Gegenprüfung nicht erneut ausgeführt: Anwendungscode,
+Produktionskonfiguration, Dockerfiles und Abhängigkeiten sind gegenüber dem
+bereits gemessenen Stand unverändert. Die zwei neuen Tests und die korrigierte
+Testzeitmessung sind Ergänzungen zum bestehenden Nachweis.
+
 Die folgenden Abschnitte dokumentieren die früheren Prüfungen vom 29.09.2026;
 deren 99 Tests und alte Zeitwerte sind historische Ergebnisse.
 

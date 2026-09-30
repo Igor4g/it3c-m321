@@ -3,13 +3,16 @@ package ch.benedict.m321.batchwriter.service;
 import ch.benedict.m321.batchwriter.PostgresTestConfiguration;
 import ch.benedict.m321.batchwriter.RabbitTestConfiguration;
 import ch.benedict.m321.batchwriter.dto.ChatMessage;
+import ch.benedict.m321.batchwriter.repository.MessageRepository;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.context.annotation.Import;
 import org.springframework.dao.DataIntegrityViolationException;
+import org.springframework.dao.DataAccessResourceFailureException;
 import org.springframework.jdbc.core.JdbcTemplate;
+import org.springframework.test.context.bean.override.mockito.MockitoSpyBean;
 
 import java.time.Instant;
 import java.util.List;
@@ -17,6 +20,7 @@ import java.util.UUID;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertThrows;
+import static org.mockito.Mockito.doAnswer;
 
 /** Prüft den Schreibweg samt echter Transaktion ohne eine umschliessende Testtransaktion. */
 @SpringBootTest
@@ -28,6 +32,9 @@ class BatchWriteServiceIntegrationTest {
 
     @Autowired
     private JdbcTemplate jdbcTemplate;
+
+    @MockitoSpyBean
+    private MessageRepository messageRepository;
 
     /** Jeder Test beginnt mit einer leeren Tabelle, ohne das Schema auszutauschen. */
     @BeforeEach
@@ -101,6 +108,26 @@ class BatchWriteServiceIntegrationTest {
         batchWriteService.saveBatch(retryBatch);
         assertMessageCount(2);
         assertStoredMessage(valid);
+    }
+
+    /** Auch nach erfolgreichem SQL muss ein Fehler vor COMMIT alle neuen Zeilen zurückrollen. */
+    @Test
+    void rollsBackWhenFailureOccursAfterJdbcBatch() {
+        ChatMessage first = createMessage("First uncommitted message");
+        ChatMessage second = createMessage("Second uncommitted message");
+        List<ChatMessage> messages = List.of(first, second);
+        DataAccessResourceFailureException failure =
+                new DataAccessResourceFailureException("Failure before commit");
+        doAnswer(invocation -> {
+            invocation.callRealMethod();
+            // Der JDBC-Batch ist fertig, aber die Service-Transaktion noch nicht bestätigt.
+            throw failure;
+        }).when(messageRepository).saveBatch(messages);
+
+        assertThrows(DataAccessResourceFailureException.class,
+                () -> batchWriteService.saveBatch(messages));
+
+        assertMessageCount(0);
     }
 
     /** Eine leere Lieferung benötigt keine Schreiboperation. */

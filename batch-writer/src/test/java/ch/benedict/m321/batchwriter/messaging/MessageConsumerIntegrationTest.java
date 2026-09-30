@@ -20,6 +20,7 @@ import org.springframework.amqp.core.MessageProperties;
 import org.springframework.amqp.core.QueueInformation;
 import org.springframework.amqp.core.Queue;
 import org.springframework.amqp.rabbit.core.RabbitTemplate;
+import org.springframework.amqp.rabbit.connection.CachingConnectionFactory;
 import org.springframework.amqp.rabbit.listener.MessageListenerContainer;
 import org.springframework.amqp.rabbit.listener.RabbitListenerEndpointRegistry;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -41,6 +42,7 @@ import java.util.List;
 import java.util.UUID;
 import java.util.HashSet;
 import java.util.Set;
+import java.util.concurrent.atomic.AtomicBoolean;
 
 import static org.awaitility.Awaitility.await;
 import static org.junit.jupiter.api.Assertions.*;
@@ -67,6 +69,8 @@ class MessageConsumerIntegrationTest {
     private PostgreSQLContainer<?> postgresContainer;
     @Autowired
     private RabbitMQContainer rabbitContainer;
+    @Autowired
+    private CachingConnectionFactory connectionFactory;
 
     private MessageListenerContainer listener;
 
@@ -243,12 +247,42 @@ class MessageConsumerIntegrationTest {
         assertEquals(1, count);
     }
 
+    /** Ein Verbindungsabbruch zwischen COMMIT und ACK darf weder Verlust noch Duplikat erzeugen. */
+    @Test
+    void recoversWhenConnectionClosesAfterCommitBeforeAcknowledgement() {
+        UUID id = UUID.randomUUID();
+        Message message = validMessage(id);
+        AtomicBoolean disconnectOnce = new AtomicBoolean(true);
+        doAnswer(invocation -> {
+            invocation.callRealMethod();
+            if (disconnectOnce.getAndSet(false)) {
+                // COMMIT ist erfolgt; der Consumer hat seinen ACK-Code noch nicht erreicht.
+                connectionFactory.resetConnection();
+            }
+            return null;
+        }).when(batchWriteService).saveBatch(anyList());
+        send(message);
+        listener.start();
+
+        Duration recoveryTimeout = Duration.ofSeconds(20);
+        await().atMost(recoveryTimeout).untilAsserted(() ->
+                verify(batchWriteService, atLeast(2)).saveBatch(anyList()));
+        listener.stop();
+
+        Integer count = jdbcTemplate.queryForObject("SELECT COUNT(*) FROM message", Integer.class);
+        assertEquals(1, count);
+        String content = jdbcTemplate.queryForObject("SELECT content FROM message WHERE id = ?", String.class, id);
+        assertEquals("Hallo", content);
+        assertQueueSize(RabbitConfig.PERSIST_QUEUE, 0);
+        assertQueueSize(RabbitConfig.DEAD_LETTER_QUEUE, 0);
+    }
+
     /** S7: derselbe Consumer übersteht 15 Sekunden echten DB-Ausfall mit 300 Nachrichten. */
     @Test
     void recoversAfterDatabaseOutageWithoutWriterRestart() throws Exception {
         listener.start();
         long startedAt = System.nanoTime();
-        Set<UUID> expectedIds = sendDuringDatabaseOutage(startedAt);
+        Set<UUID> expectedIds = sendDuringDatabaseOutage();
         awaitDatabaseRecovery(startedAt);
         boolean listenerRunning = listener.isRunning();
         assertTrue(listenerRunning);
@@ -266,17 +300,19 @@ class MessageConsumerIntegrationTest {
     }
 
     /** Stoppt nur die Datenbank und stellt sie auch bei fehlgeschlagenen Prüfungen wieder her. */
-    private Set<UUID> sendDuringDatabaseOutage(long startedAt) throws Exception {
+    private Set<UUID> sendDuringDatabaseOutage() throws Exception {
         DockerClientFactory factory = DockerClientFactory.instance();
         DockerClient dockerClient = factory.client();
         String containerId = postgresContainer.getContainerId();
         try {
             dockerClient.stopContainerCmd(containerId).withTimeout(1).exec();
+            // Die volle Ausfallzeit beginnt erst, wenn Docker den Stillstand bestätigt hat.
+            long stoppedAt = System.nanoTime();
             Set<UUID> expectedIds = sendOutageMessages();
             await().atMost(QUEUE_TIMEOUT).untilAsserted(() ->
                     verify(batchWriteService, atLeast(2)).saveBatch(anyList()));
             assertRetainedMessagesDuringOutage();
-            long elapsedMillis = elapsedMillis(startedAt);
+            long elapsedMillis = elapsedMillis(stoppedAt);
             long remainingOutageMillis = 15000 - elapsedMillis;
             assertTrue(remainingOutageMillis > 0, "Outage checks must finish before database restart");
             Thread.sleep(remainingOutageMillis);

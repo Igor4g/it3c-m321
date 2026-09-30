@@ -504,3 +504,22 @@ werden nicht als aktueller Implementierungsstand ausgegeben.
   geprüft. Lokale Markdown-Links und alle neun PowerShell-Blöcke kontrolliert.
 - Die abschliessenden Änderungen betreffen ausschliesslich Dokumentation;
   gemessene Ergebnisse stehen im aktualisierten Abnahmebericht.
+
+### Abschliessende Gegenprüfung – Fehlerfenster und Aussagekraft der Tests
+
+Die letzte Durchsicht ergänzt gezielte Nachweise, ohne den Anwendungscode zu ändern:
+
+1. Fehler nach erfolgreichem JDBC-Batch, aber vor COMMIT auslösen: Beide neuen
+   Zeilen müssen zurückgerollt werden. In einer separaten lokalen Kopie ohne
+   Transaktionsgrenze muss derselbe Test scheitern; so wird seine Aussagekraft geprüft.
+2. Die echte RabbitMQ-Verbindung nach COMMIT, vor ACK einmal schliessen:
+   Wiederzustellung nachweisen, genau eine unveränderte Zeile und leere Queues prüfen.
+3. Die 15 Sekunden im S7-Test ab bestätigtem DB-Stillstand messen, danach
+   die gesamte endgültige Suite vom Projektstamm ausführen.
+
+Ergebnisse: Beide Fehlerfenster bestanden. Die Gegenprobe ohne Transaktion schlug
+mit zwei statt null gespeicherten Zeilen erwartungsgemäss fehl. Abschliessend
+`mvn clean test`: **115 Tests**, 0 Fehler, 0 übersprungen. Java-Parser-Prüfung:
+Kommentare für alle 16 Klassen/Records und 92 Methoden/Konstruktoren vorhanden.
+Produktionscode unverändert; die vorherigen Compose-Messungen bleiben zugeordnet.
+Details und Grenzen des Nachweises stehen im Abnahmebericht.

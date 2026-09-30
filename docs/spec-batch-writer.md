@@ -316,8 +316,9 @@ Dadurch stören Datensätze vorheriger Szenarien nicht.
 
 Die folgenden Befehle beschreiben die eigene Abnahme, nicht das unbekannte
 Prüfskript des Lehrers. Die Hilfsfunktionen wurden am lokalen Compose-Stack
-erprobt und korrigiert; die vollständige eigene Abnahme S1–S8 wurde anschliessend
-am 29.09.2026 auf einem frischen lokalen Klon geprüft. Messergebnisse stehen in
+erprobt und korrigiert; die eigene Abnahme erfolgte erstmals am 29.09.2026 und
+nach den Korrekturen erneut am 30.09.2026. S2–S7 liefen dabei auf frischen lokalen
+Klonen; Ort und Code-Stand des jeweiligen S1-Laufs stehen im Abnahmebericht. Messergebnisse stehen in
 [abnahme-batch-writer.md](abnahme-batch-writer.md).
 Voraussetzung für die Beispiele: PowerShell 7, Java 21, Maven und laufendes Docker.
 Befehle im Projektstamm ausführen. SQL und HTTP bleiben innerhalb von Docker.
