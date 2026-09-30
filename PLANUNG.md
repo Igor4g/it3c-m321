@@ -2,6 +2,20 @@
 
 **Modul M321 · Klasse IT3c · 28.08.2026**
 
+> **Einordnung für Bewertung 1, Stand 30.09.2026:** Dieses Dokument ist der
+> ursprüngliche Gesamtentwurf, keine Liste bereits implementierter Funktionen.
+> Es bleibt erhalten, weil der Bewertungsauftrag insbesondere auf das Datenmodell
+> in §3.7 verweist. Für den abgegebenen Writer gelten die
+> [Spezifikation](docs/spec-batch-writer.md), der
+> [Umsetzungsplan](docs/plan-batch-writer.md) und der
+> [Abnahmebericht](docs/abnahme-batch-writer.md).
+>
+> Tatsächlich laufen `chat-service`, RabbitMQ, `batch-writer` und PostgreSQL ohne
+> veröffentlichte Host-Ports. Der Writer verwendet Batches bis **100** Nachrichten
+> und höchstens **200 ms** nominelle Sammelzeit. Die folgenden 500er-Batches,
+> 100'000 Nachrichten/Minute, Gateway, Login, Oberflächen und Lesepfade gehören zum
+> weitergehenden Entwurf und sind keine zugesagten Ergebnisse dieser Abgabe.
+
 Verteilte Chat-Anwendung als Microservice-Architektur. Vollständig in `docker-compose`
 abgebildet, Kommunikation über ein internes Docker-Netzwerk, nur die Web-App ist über
 `localhost` erreichbar.

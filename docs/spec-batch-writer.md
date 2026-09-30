@@ -1,8 +1,8 @@
 # Spezifikation: batch-writer
 
-**M321 · Bewertung 1 · Stand 29.09.2026**
+**M321 · Bewertung 1 · Stand 30.09.2026**
 
-**Status: Vor der Implementierung erstellt; umgesetzt und S1–S8 am 29.09.2026 selbst geprüft.**
+**Status: Vor der Implementierung erstellt; umgesetzt und nach Auditkorrekturen am 30.09.2026 erneut selbst geprüft.**
 Dieses Dokument beschreibt das Soll-Verhalten; die gemessenen Ergebnisse stehen im
 [Abnahmebericht](abnahme-batch-writer.md). Spezifikation und Umsetzungsplan wurden
 in dieser Reihenfolge vor dem Code separat committet. Die Lehrperson hatte laut

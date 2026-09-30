@@ -1,6 +1,10 @@
-# chat-service Boilerplate — Implementation Plan
+# chat-service — ursprünglicher Umsetzungsplan der Vorlage
 
-> **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
+> Historische Vorlage für den bereits bereitgestellten `chat-service`.
+> Offene Kästchen und Codebeispiele bilden den damaligen Bauplan ab, nicht den
+> aktuellen Abgabestatus. Sie sind keine erneut auszuführenden Arbeitsaufträge.
+> Der aktuelle Quelltext liegt in `chat-service/`; für Bewertung 1 gelten
+> [Writer-Plan](plan-batch-writer.md) und [Abnahmebericht](abnahme-batch-writer.md).
 
 **Ziel:** Der `chat-service` nimmt eine Nachricht per `POST /messages` entgegen, vergibt UUID und Server-Zeitstempel und legt sie in beide Wege — Queue `chat.persist` und Fanout-Exchange `chat.delivery`.
 

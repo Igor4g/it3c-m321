@@ -464,8 +464,7 @@ Schritte und Messungen bleiben als Verlauf erhalten.
    Erneute Compose-Abnahme S2–S8 auf frischem Klon des korrigierten Codes.
 
 Jedes Thema erhält einen eigenen deutschen Commit. Historische Planungsunterlagen
-werden nicht als aktueller Implementierungsstand ausgegeben. Die Frage nach dem
-früheren Vorzeigen der Spezifikation wird auf Wunsch des Lernenden nicht weiter bearbeitet.
+werden nicht als aktueller Implementierungsstand ausgegeben.
 
 ### Nachprüfung 1 – Zeitbereich
 
@@ -489,3 +488,19 @@ früheren Vorzeigen der Spezifikation wird auf Wunsch des Lernenden nicht weiter
 - `mvn clean test` vom Projektstamm: **113 Tests**, 0 Fehler, 0 übersprungen
   (14 Lehrertests und 99 Writer-Tests). Darunter die neue Zeitbereichsregression
   und der echte 15-Sekunden-Datenbankausfall.
+
+### Nachprüfung 3 – Abgabeunterlagen und erneute Compose-Abnahme
+
+- Alle 55 versionierten Dateien auf ihren Zweck und aktuellen Status abgeglichen.
+  PLANUNG.md bleibt wegen des im Auftrag referenzierten Datenmodells erhalten;
+  Gesamtplan, HTML-Schaubild und chat-service-Bauplan sind als historische Vorlagen
+  gekennzeichnet. README beschreibt Start, Tests und Umfang der tatsächlichen Abgabe.
+- Frischer Klon von bf36be7, .env nur aus dem Beispiel, neue leere Datenvolumes.
+  S2–S7 erneut in Reihenfolge geprüft, ohne Bereinigung zwischen Szenarien:
+  S3 10,25 s; S4 20 Transaktionen; S5 eine unveränderte Zeile; S6 je 500 Nachrichten;
+  S7 alle 300 IDs nach 24,58 s bei unveränderten Writer-Prozessen. Endstand 3301 Zeilen,
+  beide Queues vollständig leer. Der Root-Testlauf aus Nachprüfung 2 gilt für denselben Code.
+- S8 einschliesslich Kommentaren, Zwischenvariablen, Git-Historie und Ignore-Regeln
+  geprüft. Lokale Markdown-Links und alle neun PowerShell-Blöcke kontrolliert.
+- Die abschliessenden Änderungen betreffen ausschliesslich Dokumentation;
+  gemessene Ergebnisse stehen im aktualisierten Abnahmebericht.

@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Chat-App M321 — Planung</title>
+<title>Chat-App M321 — ursprünglicher Gesamtentwurf</title>
 <style>
   :root{
     --paper:#F6F7F4; --card:#FFFFFF; --ink:#0E1512; --muted:#5A625C; --faint:#8A928B;
@@ -153,16 +153,28 @@
   <div class="wrap">
 
     <header class="hero">
-      <p class="eyebrow">Planung · Modul M321 · 28.08.2026</p>
+      <p class="eyebrow">Ursprünglicher Gesamtentwurf · Modul M321 · 28.08.2026</p>
       <h1>Chat-App als verteiltes System</h1>
       <p class="sub">Microservice-Architektur in <code>docker-compose</code>, Login über Keycloak,
         RabbitMQ als Puffer für 100'000 Nachrichten pro Minute — und genau ein offener Port.</p>
       <div class="metaline">
         <span class="chip"><span class="dot"></span>Klasse IT3c</span>
-        <span class="chip info"><span class="dot"></span>Entwurf abgenommen</span>
+        <span class="chip info"><span class="dot"></span>Planungsstand, keine Implementierungsabnahme</span>
         <span class="chip warn"><span class="dot"></span>9 offene Punkte</span>
       </div>
     </header>
+
+    <aside class="card" aria-label="Aktueller Umfang der Bewertung 1">
+      <h2>Einordnung für Bewertung 1 · 30.09.2026</h2>
+      <p>Diese Grafik zeigt den ursprünglichen Gesamtentwurf. Der abgegebene Stack
+        besteht aus chat-service, RabbitMQ, batch-writer und PostgreSQL, ohne Host-Ports.
+        Der Writer verwendet bis zu <strong>100 Nachrichten pro Batch</strong> bei
+        <strong>200 ms</strong> nomineller Sammelzeit. Die folgenden 500er-Batches,
+        Lastziele, Oberflächen und Login-Dienste sind spätere Planung.</p>
+      <p>Aktuell sind <a href="../spec-batch-writer.md">Writer-Spezifikation</a>,
+        <a href="../abnahme-batch-writer.md">gemessene Abnahme</a> und
+        <a href="../../README.md">Startanleitung</a>.</p>
+    </aside>
 
     <section id="ziel">
       <p class="kicker"><span class="n">00</span>&nbsp;Das Ziel</p>

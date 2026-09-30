@@ -1,16 +1,56 @@
 # Batch-Writer: gemessene Abnahmeergebnisse
 
-Stand: 29.09.2026, eigene Schlussabnahme S1–S8 abgeschlossen.
-Abschlussdokumentation: 30.09.2026.
-Geprüfter frischer lokaler Klon: Commit `4b55c19`.
-Anwendungscode und Compose-Konfiguration sind seit `36eb6ae` unverändert;
-der abschliessende Abgabecommit ergänzt ausschliesslich Dokumentation.
+Stand: **30.09.2026**, erneute eigene Abnahme nach den Auditkorrekturen abgeschlossen.
+Geprüfter Code-Stand: **`bf36be7`**, einschliesslich Zeitbereichsprüfung aus `75ef9d9`.
+Die anschliessende Bereinigung der Abgabeunterlagen verändert nur Dokumentation.
 
 Dies ist die eigene Prüfung anhand des Lehrerauftrags. Das unbekannte Prüfskript
 des Lehrers wurde nicht ausgeführt. Das Code-Review-Gespräch und die Einreichung
 des Fork-Links durch den Lernenden sind separate Schritte.
 
-## Schlussabnahme auf frischem Klon
+## Aktuelle Schlussabnahme vom 30.09.2026
+
+S1 lief vom Arbeitsprojektstamm mit dem korrigierten Code. Für S2–S7 wurde davon
+ein frischer lokaler Klon mit `git clone --no-local` erstellt, .env ausschliesslich
+aus .env.example kopiert und mit neuen leeren Volumes gestartet. Die Szenarien
+liefen in Reihenfolge auf demselben Stack, ohne Bereinigung dazwischen.
+
+| Szenario | Ergebnis nach der Korrektur |
+|---|---|
+| S1 | `mvn clean test`: **113 Tests**, 0 Fehler, 0 übersprungen; 14 im chat-service und 99 im Writer |
+| S2 | Frischer Klon, `docker compose up -d --build`: vier laufende Dienste, keine Host-Portbindungen; Tabelle, Primärschlüssel und Raum/Zeit-Index automatisch vorhanden |
+| S3 | 1000 IDs genau einmal, Queue leer; Senden samt Prüfung **10,25 s**, Grenze 60 s |
+| S4 | Rückstau von 1000 Nachrichten vollständig gespeichert; **20 zusätzliche DB-Transaktionen**, Grenze 100 |
+| S5 | Identischer JSON-Body zweimal, nur application/json: eine unveränderte Zeile, DLQ leer |
+| S6 | Zwei Consumer, 1000 IDs genau einmal; laut Logs **je 500 Nachrichten** |
+| S7 | PostgreSQL nach 15 s wieder gestartet; alle 300 IDs samt Schlussprüfung nach **24,58 s**, Grenze 90 s; beide Writer-Prozesse unverändert |
+| S8 | Deutsche Klassen-/Methodenkommentare aktualisiert, mehrstufige Berechnungen aufgeteilt; keine Streams, keine getrackte .env oder tempContext; Themencommits und Plan stimmen überein |
+
+Endzustand: **3301 Zeilen**, chat.persist und chat.dlq jeweils 0 ready und
+0 unacknowledged. S7 prüfte Container-ID, StartedAt und RestartCount beider Writer:
+unverändert. Die 15 Sekunden DB-Ausfall sind in der gemessenen Erholungszeit enthalten.
+
+Zusätzliche Regression: Java-lesbare, aber nicht speicherbare Zeitpunkte werden
+vor JDBC abgelehnt. Drei ungültige Zeitwerte wurden mit echtem Broker und echter
+DB neben gültigen Nachrichten getestet: nur der fehlerhafte Body landete in der DLQ.
+Beide erlaubten Zeitgrenzen wurden über denselben Weg unverändert gespeichert.
+Der erste Grenztest deckte pgJDBCs Umwandlung früher Daten in -infinity auf;
+die endgültige untere Grenze berücksichtigt deshalb ausdrücklich den Treiber.
+
+Die Prüfung der Abgabeunterlagen umfasst alle 55 versionierten Dateien. README
+beschreibt den aktuellen Vier-Dienste-Stack. PLANUNG.md, seine HTML-Fassung und
+der ursprüngliche chat-service-Plan sind als Gesamtentwurf beziehungsweise historische
+Vorlage gekennzeichnet. Sie bleiben als Quellen erhalten; der Auftrag verweist auf
+das Datenmodell in PLANUNG.md. Lokale Markdown-Verweise lösen auf, alle neun
+PowerShell-Blöcke der Spezifikation sind syntaktisch gültig. Build-Artefakte,
+Unterrichtsunterlagen und lokale Zugangsdaten werden nicht versioniert.
+
+Lokale Protokolle dieser Nachprüfung: submission-s1.log, submission-s2-build.log,
+submission-s3-s7.log und submission-s3.json bis submission-s7.json in tempContext.
+Die folgenden Abschnitte dokumentieren die früheren Prüfungen vom 29.09.2026;
+deren 99 Tests und alte Zeitwerte sind historische Ergebnisse.
+
+## Historische Schlussabnahme vom 29.09.2026, Klon 4b55c19
 
 Der lokale Klon wurde mit git clone --no-local erstellt: keine unversionierten
 Dateien, keine übernommene .env und keine Build-Ergebnisse. .env wurde nur aus
