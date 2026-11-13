@@ -11,6 +11,7 @@ import org.springframework.amqp.core.FanoutExchange;
 import org.springframework.amqp.core.Queue;
 import org.springframework.amqp.rabbit.core.RabbitAdmin;
 import org.springframework.amqp.rabbit.core.RabbitTemplate;
+import org.springframework.amqp.rabbit.connection.ConnectionFactory;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.boot.testcontainers.service.connection.ServiceConnection;
@@ -46,6 +47,9 @@ class MessagePublisherIntegrationTest {
 
     @Autowired
     private RabbitAdmin rabbitAdmin;
+
+    @Autowired
+    private ConnectionFactory connectionFactory;
 
     /**
      * Eine Queue ist gemeinsamer Zustand: sie überlebt die einzelne
@@ -101,7 +105,10 @@ class MessagePublisherIntegrationTest {
     private ChatMessage receiveFrom(String queueName) {
         ParameterizedTypeReference<ChatMessage> targetType = new ParameterizedTypeReference<>() {
         };
-        return rabbitTemplate.receiveAndConvert(queueName, 5000, targetType);
+        // Die exklusive Test-Queue gehört der Consumer-Verbindung, nicht dem Publisher.
+        RabbitTemplate consumerTemplate = new RabbitTemplate(connectionFactory);
+        consumerTemplate.setMessageConverter(rabbitTemplate.getMessageConverter());
+        return consumerTemplate.receiveAndConvert(queueName, 5000, targetType);
     }
 
     /** Baut eine vollständige Nachricht, damit die Tests kurz bleiben. */

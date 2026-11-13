@@ -23,6 +23,7 @@ import java.util.UUID;
 public class MessageService {
 
     private final MessagePublisher messagePublisher;
+    private final MessageTimestamp messageTimestamp;
 
     /**
      * Nimmt eine Nachricht an und gibt zurück, unter welcher ID sie im
@@ -31,12 +32,12 @@ public class MessageService {
      * Der Rückgabewert bedeutet ausdrücklich NICHT "gespeichert" — die
      * Nachricht liegt zu diesem Zeitpunkt erst in der Queue.
      */
-    public AcceptedResponse accept(SendMessageRequest request) {
+    public synchronized AcceptedResponse accept(SendMessageRequest request) {
         int contentLength = request.content().length();
         log.info("Message received for room {} with {} characters", request.roomId(), contentLength);
 
         UUID messageId = UUID.randomUUID();
-        Instant sentAt = Instant.now();
+        Instant sentAt = messageTimestamp.next();
 
         ChatMessage message = new ChatMessage(
                 messageId,

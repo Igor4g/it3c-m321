@@ -8,6 +8,9 @@ import org.springframework.amqp.core.BindingBuilder;
 import org.springframework.amqp.core.AcknowledgeMode;
 import org.springframework.amqp.rabbit.config.SimpleRabbitListenerContainerFactory;
 import org.springframework.amqp.rabbit.connection.ConnectionFactory;
+import org.springframework.amqp.rabbit.connection.CachingConnectionFactory;
+import org.springframework.amqp.rabbit.core.RabbitTemplate;
+import org.springframework.boot.autoconfigure.amqp.RabbitTemplateConfigurer;
 import org.springframework.boot.autoconfigure.amqp.SimpleRabbitListenerContainerFactoryConfigurer;
 import org.springframework.boot.context.properties.EnableConfigurationProperties;
 import org.springframework.amqp.core.Queue;
@@ -87,6 +90,22 @@ public class RabbitConfig {
         factory.setAcknowledgeMode(AcknowledgeMode.AUTO);
         factory.setDefaultRequeueRejected(false);
         return factory;
+    }
+
+    /** Ein eigener Publisher-Kanal erhält die Sendereihenfolge ohne den Consumer zu begrenzen. */
+    @Bean
+    public RabbitTemplate rabbitTemplate(RabbitTemplateConfigurer configurer,
+                                         CachingConnectionFactory connectionFactory) {
+        ConnectionFactory publisherConnection = connectionFactory.getPublisherConnectionFactory();
+        if (!(publisherConnection instanceof CachingConnectionFactory publisherFactory)) {
+            throw new IllegalStateException("A caching publisher connection is required");
+        }
+        publisherFactory.setChannelCacheSize(1);
+        publisherFactory.setChannelCheckoutTimeout(5000);
+        RabbitTemplate template = new RabbitTemplate();
+        configurer.configure(template, connectionFactory);
+        template.setUsePublisherConnection(true);
+        return template;
     }
 
     /**

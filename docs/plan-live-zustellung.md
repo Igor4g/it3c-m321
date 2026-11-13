@@ -226,8 +226,8 @@ statt niedrig priorisierter Default-Property übergeben. Docker Desktop war zuer
 ausgeschaltet und wurde gestartet; kein Test wurde deshalb deaktiviert.
 Vorgezogener Plan-Push: `27f50377136778096ec592ffe2b750697440c956`, mit GitHub-main
 vor dem ersten Code-Patch verglichen. Der Gesamtauftrag wurde vom Lernenden
-freigegeben; ein gesonderter persönlicher Code-Review dieses Schritts ist noch
-nicht als erfolgt bestätigt.
+freigegeben. Ergänzung am 13.11.2026: Der Lernende hat den persönlichen Review
+und die Annahme der Schritte 1 und 2 im Gespräch bestätigt.
 
 ### Schritt 2 — SSE, Raumfilter und Consumer
 
@@ -258,8 +258,8 @@ Felder, fremder Raum, ungültige UUIDs, genau ein Consumer und Aufräumen geprü
 Korrigiert: `server.shutdown=immediate`, weil ein Graceful Shutdown auf absichtlich
 offene SSE-Anfragen wartete. Der Abbruchtest erzeugt normale weitere Schreibversuche;
 ein TCP-Abbruch ist nicht zwingend vor dem nächsten Schreiben sichtbar.
-Eigene Sitzungsausgabe und Testclient sind getrennt. Ein persönlicher Review des
-Lernenden wurde noch nicht als erfolgt bestätigt.
+Eigene Sitzungsausgabe und Testclient sind getrennt. Ergänzung am 13.11.2026:
+Der Lernende hat den persönlichen Review und die Annahme dieses Schritts bestätigt.
 
 ### Schritt 3a — Geordnete Annahme und Veröffentlichung
 
@@ -282,7 +282,12 @@ Prüfen: streng steigende Mikrosekundenwerte, gleiche IDs/Nutzdaten in beiden
 Publikationswegen und Erhalt der bisherigen 202-Annahme. Synchronisierung und
 Kanalbegrenzung dürfen den Consumer nicht blockieren.
 
-**Geprüft und korrigiert:** Noch nicht durchgeführt.
+**Geprüft und korrigiert:** 13.11.2026, KI-Selbstprüfung: 7 Tests grün, keine Fehler
+oder übersprungenen Tests. Gleiche/rückläufige Uhr und beide Veröffentlichungswege
+mit echtem RabbitMQ geprüft. Korrigiert: Die exklusive Queue im bestehenden
+Publisher-Test über die Consumer-Verbindung lesen, die sie angelegt hat; die neue
+Publisher-Verbindung darf diese exklusive Queue nicht konsumieren. JSON-Konverter
+und bisherige POST-Annahme erhalten. Persönlicher Review dieses Schritts noch offen.
 
 ### Schritt 3b — Begrenzte Client-Ausgabe und Zwei-Instanzen-Test
 

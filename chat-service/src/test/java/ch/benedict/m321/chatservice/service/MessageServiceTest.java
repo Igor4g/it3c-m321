@@ -42,7 +42,8 @@ class MessageServiceTest {
     @Test
     void assignsIdAndTimestamp() {
         RecordingPublisher publisher = new RecordingPublisher();
-        MessageService messageService = new MessageService(publisher);
+        MessageTimestamp timestamp = new MessageTimestamp();
+        MessageService messageService = new MessageService(publisher, timestamp);
         UUID roomId = UUID.randomUUID();
         SendMessageRequest request =
                 new SendMessageRequest(roomId, "anna", "Anna Muster", "Hallo");
@@ -56,7 +57,8 @@ class MessageServiceTest {
     @Test
     void publishesExactlyOnceWithTheSameId() {
         RecordingPublisher publisher = new RecordingPublisher();
-        MessageService messageService = new MessageService(publisher);
+        MessageTimestamp timestamp = new MessageTimestamp();
+        MessageService messageService = new MessageService(publisher, timestamp);
         UUID roomId = UUID.randomUUID();
         SendMessageRequest request =
                 new SendMessageRequest(roomId, "anna", "Anna Muster", "Hallo");
@@ -73,7 +75,8 @@ class MessageServiceTest {
     @Test
     void assignsADifferentIdEveryTime() {
         RecordingPublisher publisher = new RecordingPublisher();
-        MessageService messageService = new MessageService(publisher);
+        MessageTimestamp timestamp = new MessageTimestamp();
+        MessageService messageService = new MessageService(publisher, timestamp);
         SendMessageRequest request =
                 new SendMessageRequest(UUID.randomUUID(), "anna", "Anna Muster", "Hallo");
 
