@@ -13,7 +13,7 @@ nicht automatisch; für die Bewertung zählt dessen tatsächlich veröffentlicht
 
 | Baustein | Technologie | Aufgabe | Stand |
 |---|---|---|---|
-| chat-service | Java 21, Spring Boot 3 | POST, eigene Fanout-Queue, SSE je Raum und Wiederaufnahme | 39 Anwendungstests; korrigierte Abnahme siehe Nachprüfung |
+| chat-service | Java 21, Spring Boot 3 | POST, eigene Fanout-Queue, SSE je Raum und Wiederaufnahme | 41 Anwendungstests; korrigierte Abnahme siehe Nachprüfung |
 | rabbitmq | RabbitMQ 3.13 | Dauerhafte Persistenz-Queue und eigene Live-Kopie je Chat-Instanz | in Compose eingebunden |
 | batch-writer | Java 21, Spring Boot 3 | Einziger SQL-Schreiber, ACK nach COMMIT | Bewertung 1 abgeschlossen; 101 Tests grün |
 | postgres | PostgreSQL 16 | Dauerhafter Verlauf; Chat-Service liest, Writer schreibt | Schema und Datenvolume vorhanden |
@@ -53,7 +53,7 @@ docker compose up -d --scale chat-service=2
 
 `mvn clean test` prüft beide Module in einem Lauf: Writer-Fehlerfälle,
 echte HTTP-/RabbitMQ-Verteilung an zwei Instanzen und Wiederaufnahme mit PostgreSQL.
-Der korrigierte Gesamtlauf vom 13.11.2026 umfasst 140 erfolgreiche Tests ohne Auslassungen.
+Der korrigierte Gesamtlauf vom 13.11.2026 umfasst 142 erfolgreiche Tests ohne Auslassungen.
 `CodeStyleTest` prüft Zweckkommentare an Klassen/Methoden, das Java-Stream-Verbot,
 verschachtelte Methoden-/Konstruktorargumente und Empfängerketten;
 deutsche Sprache und Verständlichkeit werden zusätzlich manuell geprüft.
@@ -127,6 +127,9 @@ bekannte alte IDs einschliesslich Cursor erhalten. Diese Ausschlüsse bleiben be
 Verschieben des rollenden Live-Duplikatfensters bestehen. Es sind begrenzte
 ID-Metadaten, keine weiteren 10'000 Nachrichtenkopien. Unbekannte, beliebig alte
 Broker-Duplikate ausserhalb dieses Fensters werden nicht allgemein erkannt.
+Eine im RAM tatsächlich nach dem Cursor empfangene Nachricht bleibt jedoch ein
+Nachfolger, auch wenn SQL sie nach Zeit/UUID davor einordnet. Diese bekannte
+Empfangsposition hat Vorrang beim Aufbau der Ausschlussmenge.
 Eine langsame Verbindung hat ihren eigenen Ausgabe-Worker und Puffer. Bei Überlauf
 wird diese Verbindung beendet, ohne andere Clients aufzuhalten.
 

@@ -1,5 +1,8 @@
 # Nachprüfung nach unabhängiger Review — Bewertung 2
 
+> Der aktuelle Nachtrag N4 steht am Ende dieses Dokuments. Die vorangehenden
+> Abschnitte dokumentieren die erste Korrekturrunde und ihren damaligen Stand.
+
 Datum: 13.11.2026, Europe/Zurich. Ausgangspunkt ist die unabhängige Review von
 `4cdcdb17674815723ec61aef732cf1ad232352ad`. Dessen grüne S1–S8 belegten weder den
 verspäteten Cursor noch jede Stilvorgabe. Die erste Abnahme bleibt als historischer
@@ -106,3 +109,71 @@ die ausdrückliche Zustimmung zum Ersetzen dieses bereits veröffentlichten Tags
 Neue lokale Commits allein korrigieren die eingereichte Tag-Version nicht.
 `bewertung-1` bleibt unverändert. Das spätere persönliche Code-Review umfasst
 weiterhin 16 Punkte und wird nicht durch diese Tests vorweggenommen.
+
+Veröffentlichungsnachtrag vom 13.11.2026: Nach ausdrücklicher Freigabe des Lernenden
+wurden `main` und `bewertung-2` auf `e4b5265` aktualisiert und ihre Remote-SHAs
+verglichen. Die Angabe `4cdcdb1` oben beschreibt den Stand bei Erstellung des
+ersten Nachweises. Eine weitere Korrektur benötigt eine neue Tag-Freigabe.
+
+## Nachtrag N4 — Gespeicherte beobachtete Nachfolger, 13.11.2026
+
+Die unabhängige erneute Prüfung von `e4b5265` fand eine reale Regression der ersten
+Korrektur: Der RAM enthält `C → M`, beide Nachrichten stehen in PostgreSQL, aber
+M besitzt eine ältere Uhrzeit. SQL ordnet M vor C ein; die neue Ausschlussmenge
+verwarf dadurch einen tatsächlich beobachteten Nachfolger. Die bisherigen Tests
+prüften ältere neue Ereignisse während oder nach dem Nachladen, nicht diesen
+bereits vor der Wiederverbindung gespeicherten Fall.
+
+Die Korrektur ermittelt aus der vorhandenen RAM-Kopie die IDs desselben Raums,
+die tatsächlich nach dem Cursor empfangen wurden. Solche IDs werden nicht als
+SQL-Vorgänger ausgeschlossen. Die beobachtete Position hat Vorrang vor dem
+Zeit-/UUID-Vergleich. Ist der Cursor nicht im RAM vorhanden, entsteht keine solche
+Ausnahme; das bisherige Verhalten für kalte Instanzen bleibt bestehen. Cursor und
+echte bekannte Vorgänger bleiben geschützt. Die zusätzliche Hilfsmenge lebt nur
+während der Vorbereitung und ist durch die vorhandene Historiengrenze beschränkt.
+Es gibt keine neue SQL-Abfrage, Konfiguration oder Framework-Abhängigkeit.
+
+Der neue parametrisierte reale HTTP-/RabbitMQ-/PostgreSQL-Test war vor der
+Korrektur zweimal rot: Statt M kam nur die neue Live-Markierung. Nach der
+Korrektur erhält er M und danach die Markierung genau einmal. Er prüft sowohl
+ältere Uhrzeit als auch gleiche Uhrzeit mit kleinerer UUID. Zusätzlich bleibt ein
+echter RAM-Vorgänger mit neuerer Uhr ausgeschlossen. Späte Kopien von Vorgänger,
+Cursor und fehlender Nachricht erzeugen keine weiteren Ereignisse. Zusammen mit
+den bisherigen kalten Cursor-, Übergabe-, Sitzungs- und Stilfällen sind 17 gezielte
+Tests grün, keine übersprungenen Tests.
+
+Geprüfter Code: `3a5c46322adf94833db70bd6f35fbb65cd08eaab`, neuer Git-Klon,
+`.env` bytegleich mit `.env.example`. Vollständiger Maven-Lauf: **142 Tests,
+0 Fehler, 0 übersprungen**, BUILD SUCCESS um 22:14:03, Dauer 3:24 Minuten.
+Die XML-Berichte bestätigen 41 Chat-Service- und 101 Writer-Tests.
+
+Danach S2–S8 in Reihenfolge auf demselben neuen isolierten Stack, Exit-Code 0:
+
+| Szenario | N4-Ergebnis |
+|---|---|
+| S2 | Vier Dienste, keine Host-Ports; Build/Start 38.078 s |
+| S3 | 400/400/0; exakte IDs und Inhalte, einmalig, Absenderfolge korrekt |
+| S4 | Zwei Live-Queues auf eine in 6.340 s; Persistenz-Queues erhalten |
+| S5 | 100 live in 404 ms ab erstem POST bzw. 10 ms ab letztem POST; danach genau diese 100 IDs gespeichert |
+| S6 | Alle 5000 zugestellt; ready + unacked maximal 1000; neue Zustellung nach Fortsetzen |
+| S7 | Nach 10 s genau 50 fehlende Nachrichten, danach neue Live-Nachricht |
+| S8 | Erweiterte Stilprüfung grün, private Dateien nicht versioniert |
+
+Netzname der isolierten Messung: `m321-b2-successor-85a4c934`; nur externe
+Compose-Netzergänzung und Treiberpfade/-netzname weichen ab. Node-Client,
+Anwendung, Dockerfiles und Testvergleiche stammen unverändert aus dem Prüfcommit.
+Originales `chat-net`, fehlende Host-Ports und Skalierbarkeit wurden separat
+geprüft. Die vier persönlichen Container besitzen weiterhin dieselben IDs und
+Startzeiten. Nur der eigene Prüfstack wurde ohne Volumenlöschung beendet.
+
+Messräume: S5 `d4357b01-43bf-4ce8-8e48-a0ef422cff6e`,
+S6 `7e47eb09-a915-4396-b840-5467c83a9541`,
+S7 `ef14a55d-b73e-4986-975a-b67cde320f03`.
+Neue S6-ID: `94c8af03-001a-40dd-a684-6dec45302529`.
+S7-Cursor: `cab29033-97ce-4940-a387-870f1ed69e54`.
+
+Nach dieser Prüfung werden nur Dokumentation und Prüfnotizen ergänzt. Der
+veröffentlichte Tag bleibt beim Erstellen dieses Nachtrags auf `e4b5265`, bis
+eine weitere ausdrückliche Tag-Freigabe vorliegt. Eigene Spezifikation und alte
+Planabschnitte bleiben erhalten. Die Ergebnisse belegen diese Prüfungen;
+Lehrerskript und mündliche Punkte werden damit nicht vorab garantiert.

@@ -771,3 +771,18 @@ kleinerer UUID, einen tatsächlichen Vorgänger mit neuerer Uhr sowie anschliess
 Live-Zustellung und Ausbleiben alter Kopien. Die bisherigen kalten Cursor- und
 Vorgängerfälle sowie SQL-/Live-Übergabe bleiben grün. Vollständige frische Abnahme
 und deren Ergebnisse folgen als eigener Nachtrag nach diesem Korrekturcommit.
+
+Abschluss N4: Frischer Klon von `3a5c46322adf94833db70bd6f35fbb65cd08eaab`,
+.env bytegleich aus .env.example; `mvn clean test` um 22:14:03 erfolgreich,
+142 Tests (41 Chat-Service, 101 Writer), keine Fehler oder Auslassungen.
+Danach S2–S8 auf einem neuen isolierten Stack zusammenhängend grün, Exit-Code 0:
+400/400/0; Queue-Entfernung 6.340 s; 100 live in 404 ms und dieselben IDs danach
+gespeichert; 5000 an aktivem Client, Queue-Maximum 1000 und neue Zustellung nach
+Fortsetzen; genau 50 nach 10 s und anschliessend Live; Stilcheck grün.
+Netzabweichung und externe Treiberanpassung im Bericht ausdrücklich dokumentiert.
+Originales chat-net, Portregeln und Skalierbarkeit separat geprüft. Dieselben vier
+persönlichen Container und Startzeiten vorher/nachher; nur eigenen Prüfstack
+ohne -v beendet. README und Nachprüfbericht nachgeführt, alte Ergebnisse und
+eigene Spezifikation erhalten. Nach Abnahme keine Änderung an Anwendung oder Tests.
+Veröffentlichter Bewertung-2-Tag bleibt bis zu neuer ausdrücklicher Freigabe auf
+e4b5265. Dies sind technische KI-Prüfnotizen, kein erfundener persönlicher Review.
