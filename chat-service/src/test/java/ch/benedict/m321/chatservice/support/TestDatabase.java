@@ -6,6 +6,9 @@ import org.testcontainers.containers.PostgreSQLContainer;
 
 import java.time.OffsetDateTime;
 import java.time.ZoneOffset;
+import java.io.IOException;
+import java.net.ServerSocket;
+import java.util.List;
 
 /** Verwendet das echte Writer-Schema und liefert reproduzierbare JDBC-Testdaten. */
 public final class TestDatabase {
@@ -16,9 +19,17 @@ public final class TestDatabase {
 
     /** Der Testcontainer initialisiert genau das produktive Tabellenschema. */
     public static PostgreSQLContainer<?> create() {
-        return new PostgreSQLContainer<>("postgres:16-alpine")
+        PostgreSQLContainer<?> container = new PostgreSQLContainer<>("postgres:16-alpine")
                 .withDatabaseName("chat").withUsername("chat").withPassword("chat")
                 .withInitScript("schema.sql");
+        // Docker muss beim Ausfalltest denselben Testport erneut binden.
+        try (ServerSocket socket = new ServerSocket(0)) {
+            int port = socket.getLocalPort();
+            container.setPortBindings(List.of(port + ":5432"));
+        } catch (IOException exception) {
+            throw new IllegalStateException("Cannot reserve a test database port", exception);
+        }
+        return container;
     }
 
     /** Überschreibt nur Testverbindungen; Timeout-Parameter bleiben für Ausfallprüfungen begrenzt. */

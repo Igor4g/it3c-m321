@@ -28,14 +28,21 @@ public class StreamService {
     private final LiveProperties properties;
     private final RabbitListenerEndpointRegistry listenerRegistry;
     private final RecentMessageBuffer recentMessages;
+    private final ReplayService replayService;
     private final Object monitor = new Object();
     private final Map<UUID, Set<StreamSession>> clients = new HashMap<>();
 
     /** Registriert vor dem ersten Schreiben, damit zwischen Öffnen und Zustellen keine Lücke entsteht. */
     public SseEmitter open(UUID roomId) {
+        return open(roomId, null);
+    }
+
+    /** Die Sitzung empfängt schon während der SQL-Abfrage; ihr Ausgabe-Worker startet erst danach. */
+    public SseEmitter open(UUID roomId, UUID cursorId) {
         awaitConsumer();
         SseEmitter emitter = new SseEmitter(0L);
         StreamSession session = new StreamSession(roomId, properties.clientBufferSize(), emitter, this::remove);
+        List<ChatMessage> snapshot = List.of();
         synchronized (monitor) {
             Set<StreamSession> roomClients = clients.get(roomId);
             if (roomClients == null) {
@@ -43,9 +50,25 @@ public class StreamService {
                 clients.put(roomId, roomClients);
             }
             roomClients.add(session);
+            if (cursorId != null) {
+                snapshot = recentMessages.snapshot();
+            }
         }
-        session.start();
-        return emitter;
+        try {
+            if (cursorId != null) {
+                ReplayService.Prepared prepared = replayService.load(roomId, cursorId, snapshot);
+                synchronized (monitor) {
+                    List<ChatMessage> arrived = session.pendingSnapshot();
+                    List<ChatMessage> ordered = replayService.merge(prepared, arrived);
+                    session.prepareReplay(ordered);
+                }
+            }
+            session.start();
+            return emitter;
+        } catch (RuntimeException exception) {
+            session.close();
+            throw exception;
+        }
     }
 
     /** Übergibt nur passende Raum-Nachrichten; langsame Sitzungen werden ausserhalb der Sperre beendet. */

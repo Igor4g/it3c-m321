@@ -287,7 +287,8 @@ oder übersprungenen Tests. Gleiche/rückläufige Uhr und beide Veröffentlichun
 mit echtem RabbitMQ geprüft. Korrigiert: Die exklusive Queue im bestehenden
 Publisher-Test über die Consumer-Verbindung lesen, die sie angelegt hat; die neue
 Publisher-Verbindung darf diese exklusive Queue nicht konsumieren. JSON-Konverter
-und bisherige POST-Annahme erhalten. Persönlicher Review dieses Schritts noch offen.
+und bisherige POST-Annahme erhalten. Der Lernende hat den persönlichen Review und
+die Annahme der Schritte 3a und 3b am 13.11.2026 bestätigt.
 
 ### Schritt 3b — Begrenzte Client-Ausgabe und Zwei-Instanzen-Test
 
@@ -314,8 +315,8 @@ oder übersprungenen Tests. Zwei echte HTTP-Anwendungen und RabbitMQ liefern bei
 200er-Sendeserien vollständig an beide Raum-A-Clients. Alle sechs Werte, exakte
 ID-Mengen, Duplikate, Absenderfolge und leerer Raum B geprüft. Kontrolliert blockierter
 Sitzungs-Worker hält einen anderen nicht auf; Pufferüberlauf meldet sich sofort.
-HTTP-Testaufrufe begrenzt, damit ein Fehler nicht unbegrenzt wartet. Persönlicher
-Review der Schritte 3a/3b beim Lernenden angefragt, noch nicht als erfolgt bestätigt.
+HTTP-Testaufrufe begrenzt, damit ein Fehler nicht unbegrenzt wartet. Der Lernende
+hat den persönlichen Review und die Annahme der Schritte 3a/3b am 13.11.2026 bestätigt.
 
 ### Schritt 4 — DB-Lesepfad und jüngste Nachrichten
 
@@ -372,7 +373,16 @@ Datensatz darf nicht doppelt erscheinen. Auch Wiederaufnahme an der anderen
 Instanz bei verfügbarer Historie prüfen. Grenzen der zugesagten Wiederaufnahme
 ausdrücklich prüfen.
 
-**Geprüft und korrigiert:** Noch nicht durchgeführt.
+**Geprüft und korrigiert:** 13.11.2026, KI-Selbstprüfung: 9 Tests mit echtem HTTP,
+RabbitMQ und PostgreSQL grün, keine Fehler oder übersprungenen Tests. S7 mit genau
+50 Ereignissen nach 10 s und Instanzwechsel; anschliessend neue Live-Zustellung.
+SQL-Tabellensperre beweist Aufnahme neuer Ereignisse während des Ladens, inklusive
+älterem Zeitstempel. Späte Broker-Kopie bereits gelesener SQL-Zeile bleibt einmalig.
+400/404/409/503, noch nicht gespeicherter Cursor, DB-Ausfall ohne Live-Ausfall und
+Pufferüberlauf geprüft. Korrigiert: PostgreSQL-Testcontainer erhält expliziten freien
+Testport, weil Docker eine zufällige Zuordnung beim Stop/Start ändern konnte.
+Die Testvorbereitung schreibt Historie direkt; den echten Writer ergänzt die
+Compose-Abnahme. Persönlicher Review der Schritte 4/5 beim Lernenden angefragt.
 
 ### Schritt 6 — Dokumentation und Stil vollständig prüfen
 

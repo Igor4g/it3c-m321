@@ -2,10 +2,15 @@ package ch.benedict.m321.chatservice.service;
 
 import ch.benedict.m321.chatservice.dto.ChatMessage;
 import org.springframework.http.MediaType;
+import org.springframework.http.HttpStatus;
+import org.springframework.web.server.ResponseStatusException;
 import org.springframework.web.servlet.mvc.method.annotation.SseEmitter;
 
 import java.io.IOException;
 import java.util.UUID;
+import java.util.ArrayList;
+import java.util.LinkedHashSet;
+import java.util.List;
 import java.util.concurrent.ArrayBlockingQueue;
 import java.util.concurrent.BlockingQueue;
 import java.util.concurrent.TimeUnit;
@@ -19,7 +24,10 @@ public class StreamSession {
     private final SseEmitter emitter;
     private final BlockingQueue<ChatMessage> pending;
     private final Consumer<StreamSession> onClosed;
+    private final int capacity;
+    private final LinkedHashSet<UUID> seen = new LinkedHashSet<>();
     private final AtomicBoolean closed = new AtomicBoolean();
+    private boolean overflowed;
     private volatile Thread worker;
 
     /** Der Puffer gehört einer Verbindung und wird nicht mit anderen Clients geteilt. */
@@ -28,6 +36,7 @@ public class StreamSession {
         this.roomId = roomId;
         this.emitter = emitter;
         this.pending = new ArrayBlockingQueue<>(capacity);
+        this.capacity = capacity;
         this.onClosed = onClosed;
         emitter.onCompletion(this::close);
         emitter.onTimeout(this::close);
@@ -36,15 +45,46 @@ public class StreamSession {
 
     /** Startet erst nach Registrierung, damit neue Nachrichten bereits einen Platz haben. */
     public void start() {
+        if (closed.get()) {
+            throw new ResponseStatusException(HttpStatus.CONFLICT, "Connection closed during replay");
+        }
         worker = Thread.ofVirtual().name("chat-stream").start(this::writeMessages);
     }
 
     /** Wartet nie auf Netzwerk-I/O; ein voller Puffer wird dem Aufrufer gemeldet. */
-    public boolean offer(ChatMessage message) {
-        if (closed.get()) {
+    public synchronized boolean offer(ChatMessage message) {
+        if (closed.get() || overflowed) {
             return false;
         }
-        return pending.offer(message);
+        if (seen.contains(message.id())) {
+            return true;
+        }
+        if (!pending.offer(message)) {
+            overflowed = true;
+            return false;
+        }
+        seen.add(message.id());
+        if (seen.size() > capacity) {
+            seen.removeFirst();
+        }
+        return true;
+    }
+
+    /** Vor Worker-Start sind dies genau die während des SQL-Ladens eingetroffenen Ereignisse. */
+    public synchronized List<ChatMessage> pendingSnapshot() {
+        return new ArrayList<>(pending);
+    }
+
+    /** Ersetzt unter der Registrierungssperre den Übergabepuffer durch die vollständige geordnete Folge. */
+    public synchronized void prepareReplay(List<ChatMessage> messages) {
+        if (closed.get() || overflowed || messages.size() > capacity) {
+            throw new ResponseStatusException(HttpStatus.CONFLICT, "Replay buffer exceeded");
+        }
+        pending.clear();
+        seen.clear();
+        for (ChatMessage message : messages) {
+            offer(message);
+        }
     }
 
     /** Die Raumkennung bestimmt die Empfänger, nicht der Name des Absenders. */
