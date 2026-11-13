@@ -309,7 +309,13 @@ Prüfen: 400 IDs an beiden A-Clients, keine doppelten IDs, B bleibt leer; FIFO u
 Überlauf eines einzelnen Client-Puffers mit unverändert weiterarbeitendem anderen
 Client. Keine zufälligen langen Wartezeiten als Ersatz für Bereitschaftssignale.
 
-**Geprüft und korrigiert:** Noch nicht durchgeführt.
+**Geprüft und korrigiert:** 13.11.2026, KI-Selbstprüfung: 3 Tests grün, keine Fehler
+oder übersprungenen Tests. Zwei echte HTTP-Anwendungen und RabbitMQ liefern beide
+200er-Sendeserien vollständig an beide Raum-A-Clients. Alle sechs Werte, exakte
+ID-Mengen, Duplikate, Absenderfolge und leerer Raum B geprüft. Kontrolliert blockierter
+Sitzungs-Worker hält einen anderen nicht auf; Pufferüberlauf meldet sich sofort.
+HTTP-Testaufrufe begrenzt, damit ein Fehler nicht unbegrenzt wartet. Persönlicher
+Review der Schritte 3a/3b beim Lernenden angefragt, noch nicht als erfolgt bestätigt.
 
 ### Schritt 4 — DB-Lesepfad und jüngste Nachrichten
 

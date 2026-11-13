@@ -59,6 +59,7 @@ public class TestChat implements AutoCloseable {
         String json = mapper.writeValueAsString(message);
         URI address = URI.create(baseUrl + "/messages");
         HttpRequest request = HttpRequest.newBuilder(address)
+                .timeout(Duration.ofSeconds(5))
                 .header("Content-Type", "application/json")
                 .POST(HttpRequest.BodyPublishers.ofString(json)).build();
         HttpResponse<String> response = client.send(request, HttpResponse.BodyHandlers.ofString());
@@ -70,7 +71,7 @@ public class TestChat implements AutoCloseable {
     /** Einfacher HTTP-Aufruf für negative Parameter- und Statusprüfungen. */
     public HttpResponse<String> get(String path, String cursor) throws Exception {
         URI address = URI.create(baseUrl + path);
-        HttpRequest.Builder request = HttpRequest.newBuilder(address).GET();
+        HttpRequest.Builder request = HttpRequest.newBuilder(address).GET().timeout(Duration.ofSeconds(10));
         if (cursor != null) {
             request.header("Last-Event-ID", cursor);
         }
