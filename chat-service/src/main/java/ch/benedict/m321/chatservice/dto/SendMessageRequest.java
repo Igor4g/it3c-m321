@@ -6,14 +6,13 @@ import jakarta.validation.constraints.NotNull;
 import java.util.UUID;
 
 /**
- * Was das Gateway an den chat-service schickt.
+ * Eingabevertrag für POST /messages im internen Docker-Netz.
  *
  * Bewusst OHNE id und ohne Zeitstempel: beides vergibt der Server.
- * Ein Client, der sich seine eigene Nachrichten-ID ausdenken darf,
- * kann fremde Nachrichten überschreiben.
+ * So erhalten neue Nachrichten eine eigene Identität unabhängig vom Client.
  *
  * @param roomId     der Raum, in den die Nachricht gehört
- * @param senderId   die sub-Kennung des Absenders aus Keycloak
+ * @param senderId   die übergebene Kennung des Absenders, später aus Keycloak
  * @param senderName der Anzeigename, damit die Historie lesbar bleibt
  * @param content    der Text der Nachricht
  */

@@ -27,9 +27,9 @@ public class MessagePublisher {
     /**
      * Legt die Nachricht in den Schreibweg und in den Zustellweg.
      *
-     * Reihenfolge mit Absicht: erst persist, dann delivery. Schlägt das
-     * Senden fehl, ist die Nachricht dann noch nirgends zugestellt worden
-     * und der Benutzer bekommt einen ehrlichen Fehler.
+     * Erst persist, dann delivery. Die beiden Veröffentlichungen sind nicht
+     * atomar: nach einem Fehler kann der erste Weg bereits erfolgreich sein.
+     * Eine erfolgreiche Annahme beweist noch keinen Datenbank-COMMIT.
      */
     public void publish(ChatMessage message) {
         rabbitTemplate.convertAndSend(QueueNames.PERSIST_QUEUE, message);

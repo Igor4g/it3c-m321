@@ -13,6 +13,7 @@ import org.springframework.boot.autoconfigure.SpringBootApplication;
 @SpringBootApplication
 public class ChatServiceApplication {
 
+    /** Startet HTTP und die lokalen Queue-Consumer gemeinsam als skalierbare Instanz. */
     public static void main(String[] args) {
         SpringApplication.run(ChatServiceApplication.class, args);
     }

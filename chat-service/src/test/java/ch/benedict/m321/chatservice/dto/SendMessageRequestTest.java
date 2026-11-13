@@ -22,12 +22,14 @@ class SendMessageRequestTest {
 
     private Validator validator;
 
+    /** Jede Prüfung verwendet die echten Bean-Validation-Regeln des HTTP-Vertrags. */
     @BeforeEach
     void setUp() {
         ValidatorFactory factory = Validation.buildDefaultValidatorFactory();
         this.validator = factory.getValidator();
     }
 
+    /** Eine vollständige Anfrage darf nicht schon an der Eingangsprüfung scheitern. */
     @Test
     void acceptsCompleteRequest() {
         SendMessageRequest request = new SendMessageRequest(
@@ -38,6 +40,7 @@ class SendMessageRequestTest {
         assertTrue(violations.isEmpty());
     }
 
+    /** Reine Leerzeichen sind keine anzuzeigende Chat-Nachricht. */
     @Test
     void rejectsBlankContent() {
         SendMessageRequest request = new SendMessageRequest(
@@ -48,6 +51,7 @@ class SendMessageRequestTest {
         assertEquals(1, violations.size());
     }
 
+    /** Ohne Raum könnte der Zustellweg keine eindeutige Empfängergruppe wählen. */
     @Test
     void rejectsMissingRoomId() {
         SendMessageRequest request = new SendMessageRequest(

@@ -13,9 +13,8 @@ import org.springframework.web.bind.annotation.RestController;
 /**
  * Die interne REST-Schnittstelle des chat-service.
  *
- * Erreichbar ist sie nur aus dem Docker-Netz — das web-gateway und der
- * load-generator rufen sie auf. Deshalb prüft dieser Dienst kein Token:
- * das hat das Gateway bereits getan.
+ * Erreichbar ist sie nur aus dem Docker-Netz. Gateway und Tokenprüfung
+ * gehören zum späteren Gesamtprojekt, nicht zu dieser Bewertung.
  */
 @RestController
 @RequiredArgsConstructor

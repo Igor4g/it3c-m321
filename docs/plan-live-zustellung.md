@@ -347,7 +347,8 @@ verwendet, keine zweite abweichende Schema-Kopie. SQL-Cursor, Raumfilter,
 Mikrosekunden und UUID-Gleichstände oberhalb des Vorzeichenbits real geprüft.
 Jüngster Puffer bleibt begrenzt und erhält Empfangsreihenfolge. Compose bekommt
 DB-Leseparameter, aber keine neue PostgreSQL-Startabhängigkeit des Chat-Service.
-Persönlicher Review dieses Schritts noch offen.
+Der Lernende hat den persönlichen Review und die Annahme der Schritte 4/5
+am 13.11.2026 im Gespräch bestätigt.
 
 ### Schritt 5 — Wiederaufnahme und atomarer Übergang zu Live
 
@@ -382,7 +383,8 @@ SQL-Tabellensperre beweist Aufnahme neuer Ereignisse während des Ladens, inklus
 Pufferüberlauf geprüft. Korrigiert: PostgreSQL-Testcontainer erhält expliziten freien
 Testport, weil Docker eine zufällige Zuordnung beim Stop/Start ändern konnte.
 Die Testvorbereitung schreibt Historie direkt; den echten Writer ergänzt die
-Compose-Abnahme. Persönlicher Review der Schritte 4/5 beim Lernenden angefragt.
+Compose-Abnahme. Der Lernende hat den persönlichen Review und die Annahme
+der Schritte 4/5 am 13.11.2026 im Gespräch bestätigt.
 
 ### Schritt 6 — Dokumentation und Stil vollständig prüfen
 
@@ -406,7 +408,21 @@ Compose-Abnahme S8 ohne fehlenden CodeStyleTest ausführen kann.
 **Test:** `mvn clean test`, `docker compose config --quiet`, S8-Quelltextprüfung
 und Kontrolle, dass `.env`, `tempContext/` und Prüfartefakte nicht versioniert sind.
 
-**Geprüft und korrigiert:** Noch nicht durchgeführt.
+**Geprüft und korrigiert:** 13.11.2026, Gesamtlauf um 15:39 Uhr erfolgreich:
+36 Chat-Service- und 101 Writer-Tests, keine Fehler oder übersprungenen Tests.
+CodeStyleTest prüft geschriebene Java-Deklarationen mit dem JDK-Parser; deutsche
+Zweckkommentare und Lesbarkeit zusätzlich gelesen. 19 fehlende Kommentare in
+Vorlagendateien ergänzt und überholte Gateway-/Atomaritätsaussagen korrigiert.
+Die vier alten Spring-Testkontexte werden nach ihrer Klasse geschlossen.
+Korrigiert: Der Überlauftest benutzte dieselbe ID zweimal; die neue Duplikatsperre
+ignoriert sie zu Recht. Jetzt werden Duplikatannahme und Überlauf mit neuer ID
+getrennt geprüft. Ein weiterer Gesamtlauf scheiterte beim RabbitMQ-Start während
+gleichzeitigem Image-Build; nach Ende des Builds sequenziell vollständig grün.
+Compose-Konfiguration gültig, lokale Dokumentlinks vorhanden, keine versionierte
+.env oder tempContext-Dateien und keine kyrillischen Texte in Abgabedateien.
+README auf Bewertung 2 aktualisiert; eigene Spezifikation nicht umgeschrieben.
+Der Lernende hat den persönlichen Review und die Annahme von Schritt 6 bestätigt.
+Seine zusätzliche Vorgabe bleibt: Abgabedateien nur deutsch/englisch.
 
 ### Schritt 7 — Compose-Abnahme und Ausfälle
 

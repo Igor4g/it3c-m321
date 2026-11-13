@@ -13,6 +13,7 @@ import static org.junit.jupiter.api.Assertions.assertNotNull;
  */
 class MessageExceptionHandlerTest {
 
+    /** Ein Broker-Fehler wird als vorübergehende Nichtverfügbarkeit erkennbar. */
     @Test
     void answersWithServiceUnavailable() {
         MessageExceptionHandler handler = new MessageExceptionHandler();

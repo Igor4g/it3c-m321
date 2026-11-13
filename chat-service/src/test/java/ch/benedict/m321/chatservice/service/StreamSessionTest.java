@@ -8,7 +8,6 @@ import org.springframework.web.servlet.mvc.method.annotation.SseEmitter;
 import java.io.IOException;
 import java.time.Duration;
 import java.time.Instant;
-import java.util.List;
 import java.util.UUID;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.LinkedBlockingQueue;
@@ -50,7 +49,10 @@ class StreamSessionTest {
             assertTrue(slowEmitter.entered.await(5, TimeUnit.SECONDS));
             ChatMessage message = message("healthy");
             assertTrue(slow.offer(message));
-            assertTimeoutPreemptively(Duration.ofMillis(500), () -> assertFalse(slow.offer(message)));
+            // Eine bereits bekannte ID belegt keinen zweiten Platz im Puffer.
+            assertTrue(slow.offer(message));
+            ChatMessage nextMessage = message("overflow");
+            assertTimeoutPreemptively(Duration.ofMillis(500), () -> assertFalse(slow.offer(nextMessage)));
             healthy.start();
             assertTrue(healthy.offer(message));
             assertEquals(message, healthyEmitter.messages.poll(5, TimeUnit.SECONDS));

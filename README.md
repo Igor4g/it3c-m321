@@ -1,162 +1,165 @@
-# M321 — Bewertung 1: Batch-Writer
+# M321 — Chat-App: Persistenz und Live-Zustellung
 
 Lernprojekt zum Modul **M321 Verteilte Systeme programmieren**, Klasse IT3c.
-Der Batch-Writer holt Chat-Nachrichten aus RabbitMQ und speichert sie stapelweise
-in PostgreSQL. Er bestätigt sie erst nach COMMIT, verhindert doppelte Zeilen
-und arbeitet nach einem vorübergehenden Datenbankausfall selbstständig weiter.
-Der vorhandene `chat-service` stammt aus der Unterrichtsvorlage.
+Bewertung 1 ergänzt den Batch-Writer; Bewertung 2 ergänzt die raumbezogene
+Live-Zustellung und Wiederaufnahme im bestehenden Chat-Service.
 
-## Projekt starten
-
-1. Voraussetzungen: **Java 21**, **Maven 3.9**, **Docker mit Compose v2**, **Git**.
-   Docker muss auch für die Integrationstests laufen.
-2. Diesen Fork klonen:
-   ```bash
-   git clone https://github.com/Igor4g/it3c-m321.git
-   cd it3c-m321
-   ```
-3. Lokale Umgebungsdatei anlegen:
-   ```bash
-   cp .env.example .env
-   ```
-   Die Beispielwerte reichen für den lokalen Bewertungsstack. Die echte `.env`
-   bleibt lokal und wird nicht eingecheckt.
-4. Die folgenden Prüf- und Startbefehle im Projektstamm ausführen.
-
-Die aktuelle Spezifikation, der Plan und die gemessenen Ergebnisse sind unten
-verlinkt. Die Nachprüfung vom 30.09. ergänzt den Schutz vor nicht speicherbaren
-Zeitpunkten und bereinigt die Lesbarkeit. Das spätere Code-Review-Gespräch ist
-ein eigener Bewertungsteil; eigene Tests sind keine bereits vergebenen Lehrerpunkte.
-Die erneute eigene Abnahme S1–S8 vom **30.09.2026** ist im
-[Abnahmebericht](docs/abnahme-batch-writer.md) dokumentiert.
-
-## Bauen, testen, starten
-
-```bash
-mvn clean test                   # alle Tests, RabbitMQ und PostgreSQL per Testcontainers
-docker compose config --quiet    # Konfiguration und benötigte .env-Werte prüfen
-docker compose up -d --build     # alle vier Dienste im Netz chat-net starten
-docker compose ps               # Status anzeigen
-docker compose logs batch-writer # Verarbeitung und mögliche DB-Fehler anzeigen
-```
-
-Keiner der vier Dienste veröffentlicht einen Port auf dem Host. HTTP-Aufrufe an
-`chat-service:8080` erfolgen aus dem Netz `chat-net`. Das spätere Gateway gehört
-nicht zu Bewertung 1.
-
-Die Integrationstests benötigen einen laufenden Docker-Daemon. Für den Ausfalltest
-wird ein Testcontainer für 15 Sekunden gestoppt; der Compose-Stack bleibt unberührt.
-Die Suite umfasst **115 Tests**, einschliesslich Duplikaten, DB-Ausfall,
-ungültigen Nachrichten neben gültigen sowie den Zeitgrenzen von JDBC/PostgreSQL.
-Zusätzliche Fehlertests prüfen Rollback nach dem SQL-Batch und Wiederzustellung
-bei Verbindungsabbruch zwischen COMMIT und ACK.
-
-Zwei Writer lassen sich ohne Änderungen am Code starten:
-
-```bash
-docker compose up -d --scale batch-writer=2
-```
-
-## Eine Nachricht durch den Stack senden (PowerShell)
-
-Nach dem Start aller Dienste:
-
-```powershell
-$body = '{"roomId":"22222222-2222-4222-8222-222222222222","senderId":"anna","senderName":"Anna Muster","content":"Hallo aus Compose"}'
-$body | docker run --rm -i --network chat-net curlimages/curl:8.10.1 --silent --show-error --fail-with-body -H 'Content-Type: application/json' --data-binary '@-' http://chat-service:8080/messages
-```
-
-Die Antwort enthält die erzeugte Nachrichten-ID. Der curl-Container ist ein
-vorübergehendes Prüfwerkzeug innerhalb des Netzes und wird anschliessend entfernt.
-HTTP 202 bestätigt die Annahme; die Speicherung erfolgt kurz danach durch den Writer.
-
-```powershell
-# Bereits gespeicherte Nachrichten anzeigen; Zugangsdaten kommen aus dem Container.
-docker compose exec -T postgres sh -c 'psql -U "$POSTGRES_USER" -d "$POSTGRES_DB" -c "SELECT id, content, sent_at FROM message ORDER BY sent_at DESC LIMIT 5;"'
-```
-
-## Daten und Betrieb
-
-`docker compose down` beendet die Dienste und erhält die benannten Datenvolumes.
-`docker compose up -d` startet sie wieder. `down -v` löscht dagegen die gespeicherten
-Nachrichten und Queues und ist kein normaler Neustart.
-
-PostgreSQL führt `batch-writer/src/main/resources/schema.sql` beim ersten Start mit
-leerem Datenvolume aus. Ein normales Neustarten überschreibt weder Schema noch Daten.
-Änderungen an Schema oder initialen Zugangsdaten eines bestehenden Volumes brauchen
-eine bewusste Anpassung; das Ändern von `.env` initialisiert keine bestehende DB neu.
-
-Die Beispiele in `.env.example` dienen dem lokalen Unterricht. Die eigene `.env`
-und `tempContext/` bleiben aus Git und aus dem Docker-Build-Kontext ausgeschlossen.
-Der Writer nutzt standardmässig 100 Nachrichten pro Batch, 200 ms Sammelzeit und
-1000 ms Pause nach einem DB-Fehler. Die Einstellungen stehen in `.env.example`.
-
-## Umfang dieser Abgabe
+## Stand
 
 | Baustein | Technologie | Aufgabe | Stand |
 |---|---|---|---|
-| chat-service | Spring Boot 3, Java 21 | Nimmt Nachrichten per `POST /messages` an, legt sie auf Queue und Fanout-Exchange | vorhanden |
-| rabbitmq | RabbitMQ 3.13 | Message Queue zwischen den Services | vorhanden |
-| batch-writer | Spring Boot 3, Java 21 | Einziger Schreiber in die Datenbank | implementiert; in Compose eingebunden |
-| postgres | PostgreSQL 16 | Speichert den Chat-Verlauf | Schema, Datenvolume und Integrationstests vorhanden |
-Login/Keycloak, Gateway, Oberflächen, Chat-Historie, Raumverwaltung und
-Lastgenerator gehören zum späteren Gesamtprojekt und nicht zu Bewertung 1.
-Das allgemeine Lastziel von 100'000 Nachrichten/Minute ist hier nicht als erreicht behauptet.
+| chat-service | Java 21, Spring Boot 3 | POST, eigene Fanout-Queue, SSE je Raum und Wiederaufnahme | implementiert; Anwendungstests vorhanden |
+| rabbitmq | RabbitMQ 3.13 | Dauerhafte Persistenz-Queue und eigene Live-Kopie je Chat-Instanz | in Compose eingebunden |
+| batch-writer | Java 21, Spring Boot 3 | Einziger SQL-Schreiber, ACK nach COMMIT | Bewertung 1 abgeschlossen |
+| postgres | PostgreSQL 16 | Dauerhafter Verlauf; Chat-Service liest, Writer schreibt | Schema und Datenvolume vorhanden |
 
-## Dokumente
+Die eigene Compose-Schlussabnahme für Bewertung 2 wird getrennt dokumentiert.
+Login/Keycloak, Gateway, Oberfläche, Raumverwaltung sowie Gelesen- und
+Geliefert-Status gehören nicht zu dieser Abgabe. Das spätere allgemeine Lastziel
+von 100'000 Nachrichten pro Minute wird nicht als erreicht behauptet.
 
-- [`docs/abnahme-batch-writer.md`](docs/abnahme-batch-writer.md) — eigene Abnahme S1–S8, Messwerte und dokumentierte Prüfkorrekturen.
+## Start und Tests
 
-- [`docs/plan-batch-writer.md`](docs/plan-batch-writer.md) — Umsetzung in kleinen Schritten mit Tests und eigenständigen Commits.
+Voraussetzungen: **JDK 21**, **Maven 3.9**, **Git**, laufender **Docker mit Compose v2**.
+Docker wird auch für die echten RabbitMQ-/PostgreSQL-Integrationstests benötigt.
 
-- [`docs/spec-batch-writer.md`](docs/spec-batch-writer.md) — Vertrag, Fehlerverhalten und ausführbare Abnahmekommandos für Bewertung 1.
+```bash
+git clone https://github.com/Igor4g/it3c-m321.git
+cd it3c-m321
+cp .env.example .env
+mvn clean test
+docker compose config --quiet
+docker compose up -d --build
+docker compose ps
+```
 
-- [`PLANUNG.md`](PLANUNG.md) — ursprünglicher Gesamtentwurf und Referenz für das
-  Datenmodell; der Hinweis am Dokumentanfang grenzt ihn vom tatsächlichen Abgabestand ab.
-- [`docs/design/2026-08-28-chat-app-planung.html`](docs/design/2026-08-28-chat-app-planung.html)
-  — historische grafische Fassung des Gesamtentwurfs, lokal im Browser öffnen.
-- [`docs/plan-chat-service.md`](docs/plan-chat-service.md) — Schritt-für-Schritt-Plan, nach dem
-  der bereitgestellte `chat-service` gebaut wurde; als historische Vorlage gekennzeichnet.
-- [`CLAUDE.md`](CLAUDE.md) — Codestil-Regeln für dieses Projekt. Gelten auch für dich.
-- [`docs/flipchart-chat-app.png`](docs/flipchart-chat-app.png) — das Flipchart aus der Lektion,
-  von dem die Planung ausgeht; die HEIC-Datei daneben ist das Originalbild.
+In PowerShell lautet der Kopierbefehl `Copy-Item .env.example .env`.
+Die Beispielwerte reichen für den lokalen Schulstack. Eigene Zugangsdaten gehören
+nur in die ignorierte `.env`. Auch `tempContext/` und Build-Artefakte bleiben lokal.
 
-## Abgabe
+Kein Dienst veröffentlicht Host-Ports. Alle Dienste sprechen über `chat-net`.
+HTTP-Prüfclients laufen ebenfalls in diesem Netz. Zwei Chat-Instanzen starten mit:
 
-Abzugeben ist der Link zu diesem Fork bis **02.10.2026, 23:59 Uhr**.
-Die Lehrperson prüft den veröffentlichten Tag `bewertung-1`; er muss auf den
-gewünschten geprüften Commit auf `main` zeigen. Ein späterer Commit auf `main`
-ändert einen bereits gesetzten Tag nicht automatisch. Der Abnahmebericht nennt
-den geprüften Code-Stand. Die Einreichung des Links erfolgt separat im Abgabeportal.
+```bash
+docker compose up -d --scale chat-service=2
+```
 
-## Aufbau des Writers
+`mvn clean test` prüft beide Module in einem Lauf: Writer-Fehlerfälle,
+echte HTTP-/RabbitMQ-Verteilung an zwei Instanzen und Wiederaufnahme mit PostgreSQL.
+Der eigene Gesamtlauf vom 13.11.2026 umfasst 137 erfolgreiche Tests ohne Auslassungen.
+`CodeStyleTest` prüft Zweckkommentare an Klassen/Methoden und das Java-Stream-Verbot;
+deutsche Sprache und Verständlichkeit werden zusätzlich manuell geprüft.
+Die Maven-Testcontainer verwenden eigene, vorübergehende Ports. Das ändert die
+portfreie Produktionskonfiguration in Compose nicht.
 
-Der Ablauf ist: Queue → MessageConsumer → MessageReader → BatchWriteService →
-MessageRepository → PostgreSQL. Erst nach erfolgreichem COMMIT bestätigt der
-Consumer die betreffenden Nachrichten an RabbitMQ.
+## Nachrichtenweg
 
-| Datei unter batch-writer/src/main | Verantwortung |
-|---|---|
-| java/.../messaging/MessageConsumer.java | Lieferungen prüfen lassen, speichern, ACK/NACK und Wiederzustellung steuern |
-| java/.../messaging/MessageReader.java | JSON und die sechs Vertragsfelder prüfen |
-| java/.../messaging/InvalidMessageException.java | Dauerhafte Datenfehler von technischen DB-Fehlern unterscheiden |
-| java/.../dto/ChatMessage.java | Die geprüften Nachrichtenwerte als record transportieren |
-| java/.../service/BatchWriteService.java | Eine Transaktion je nicht leerem Batch abgrenzen |
-| java/.../repository/MessageRepository.java | Parametrisiertes SQL mit Schutz vor doppelten IDs ausführen |
-| java/.../config/RabbitConfig.java und BatchProperties.java | Queues, Batch-Grenzen und Retry-Pause konfigurieren |
-| resources/schema.sql und application.yml | Datenmodell und Verbindungseinstellungen festlegen |
+`POST /messages` nimmt JSON mit `roomId` (UUID), `senderId`, `senderName` und
+`content` entgegen. Der Server ergänzt `id` und `sentAt`. HTTP 202 mit diesen beiden
+Werten bedeutet Annahme, noch keine bestätigte Speicherung oder Client-Anzeige.
 
-Der Writer hat keine HTTP-Schnittstelle und keine View. Deshalb reichen diese
-Zuständigkeiten ohne zusätzliche Router, Interfaces oder ein eigenes Batch-Framework.
+Der Publisher sendet zuerst an `chat.persist`, danach an den Fanout-Exchange
+`chat.delivery`. Die beiden Veröffentlichungen sind keine atomare Transaktion.
+Der Writer speichert unabhängig von der Live-Zustellung. Standardwerte:
+100 Nachrichten pro Batch, 200 ms Sammelzeit, 1000 ms Pause nach einem technischen
+DB-Fehler. Technische Wiederholungen sind nicht zahlenmässig begrenzt.
 
-## Codestil, kurz
+Jede Chat-Instanz besitzt eine eigene temporäre Queue am Fanout: maximal 999
+wartende plus eine unbestätigte Nachricht, ein Consumer und `prefetch=1`.
+Bei Überlauf verwirft RabbitMQ alte Live-Kopien (`drop-head`). `chat.persist`
+und `chat.dlq` sind davon nicht betroffen. Nach Verbindungsende wird die temporäre
+Queue entfernt. Der Consumer bestätigt nach lokaler Übernahme, nicht nach Anzeige
+beim Client.
 
-Der Massstab ist: **kann eine lernende Person jede Zeile vorlesen und sagen, was sie tut?**
+`GET /stream?roomId=<UUID>` öffnet `text/event-stream`. Ein Ereignis enthält die
+Nachrichten-UUID als SSE-`id` und vollständiges JSON mit `id`, `roomId`,
+`senderId`, `senderName`, `content`, `sentAt` als `data`. Nur Clients desselben
+Raums erhalten es. Anfangskommentar und Heartbeats alle 15 Sekunden enthalten
+keine Chat-ID oder Chat-Daten.
 
-- Eine Anweisung pro Zeile, Zwischenresultate in benannte Variablen.
-- `for`-Schleife statt Stream, `if` statt verschachteltem Ternary.
-- Sprechende Namen in ganzen Wörtern.
-- Über jeder Methode ein bis zwei Sätze: was sie tut und warum es sie gibt.
-- Kommentare auf Deutsch, als Erklärung an eine Mitlernende.
+Ohne `Last-Event-ID` beginnt die Verbindung live ohne automatische alte Historie.
+Mit Header liefert der Dienst Nachrichten nach dieser ID nach und wechselt
+anschliessend über denselben Ausgabeweg zu Live. PostgreSQL und jüngste RAM-Daten
+werden anhand der ID zusammengeführt; der Cursor selbst wird nicht erneut gesendet.
+Der jüngste Puffer schliesst die Verzögerung des Writers. Während des DB-Ladens
+werden neue Ereignisse bereits für die Verbindung gesammelt.
 
-Die vollständigen Regeln stehen in [`CLAUDE.md`](CLAUDE.md).
+Nachlieferung ist nach `sentAt`, bei Gleichstand nach kanonischer UUID sortiert.
+Live bleibt pro Verbindung FIFO; innerhalb einer Instanz werden Annahme und
+Publikation geordnet. Eine globale Reihenfolge konkurrierender Instanzen oder
+unbegrenztes Exactly-once wird nicht versprochen.
+
+## Grenzen und Fehler
+
+`LIVE_HISTORY_SIZE`, `LIVE_CLIENT_BUFFER_SIZE` und `LIVE_REPLAY_LIMIT` sind jeweils
+standardmässig 10'000 Nachrichten. Sie begrenzen unterschiedliche Anwendungspuffer;
+die RabbitMQ-Grenze bleibt unabhängig davon 999 plus eins.
+Eine langsame Verbindung hat ihren eigenen Ausgabe-Worker und Puffer. Bei Überlauf
+wird diese Verbindung beendet, ohne andere Clients aufzuhalten.
+
+- HTTP 400: fehlender/ungültiger Raum oder ungültige `Last-Event-ID`.
+- HTTP 404: Cursor nach erfolgreicher DB-Abfrage unbekannt oder in anderem Raum.
+- HTTP 409: Nachlieferung oder Vorbereitung überschreitet die konfigurierte Grenze.
+- HTTP 503: DB bei Wiederaufnahme nicht erreichbar oder Live-Consumer nicht bereit.
+
+Reine Live-Verbindungen und POSTs benötigen keine DB. Wiederaufnahme mit Header
+braucht eine erfolgreiche DB-Abfrage, auch wenn RAM-Daten vorhanden sind.
+Nach Beginn des SSE-Streams kann kein neuer HTTP-Fehlerstatus folgen:
+bei Ausgabe- oder Pufferfehler wird die betroffene Verbindung geschlossen.
+Fehlende Nachrichten ausserhalb aller verfügbaren Quellen sind nicht allgemein
+rekonstruierbar. Genauer Vertrag und Begründungen stehen in der Spezifikation.
+
+## Manuelle Nutzung aus PowerShell
+
+```powershell
+$body = '{"roomId":"22222222-2222-4222-8222-222222222222","senderId":"anna","senderName":"Anna Muster","content":"Hallo"}'
+$body | docker run --rm -i --network chat-net curlimages/curl:8.10.1 --silent --show-error --fail-with-body -H 'Content-Type: application/json' --data-binary '@-' http://chat-service:8080/messages
+docker run --rm --network chat-net curlimages/curl:8.10.1 --no-buffer --fail 'http://chat-service:8080/stream?roomId=22222222-2222-4222-8222-222222222222'
+```
+
+Stream zuerst in einem zweiten Terminal öffnen, dann senden.
+Zum Wiederaufnehmen zusätzlich `-H 'Last-Event-ID: <zuletzt empfangene UUID>'`
+an curl übergeben. Bei mehreren Instanzen spricht eine Prüfung jede Instanz
+gezielt über ihre aktuelle Container-Adresse an.
+
+## Aufbau
+
+Im `chat-service/src/main/java/ch/benedict/m321/chatservice/`:
+
+- `controller`: POST- und SSE-Vertrag, Parameterprüfung.
+- `messaging/LiveMessageConsumer`: eine Live-Kopie aus RabbitMQ entgegennehmen.
+- `service/MessageService`, `MessageTimestamp`, `MessagePublisher`: Identität,
+  monotone Mikrosekunden-Zeit je Instanz und geordnete Veröffentlichung.
+- `service/StreamService`, `StreamSession`: Räume, Verbindungen, begrenzte Ausgabe.
+- `service/ReplayService`, `RecentMessageBuffer`: Historie und Live-Übergabe.
+- `repository/MessageHistoryRepository`: ausschliesslich parametrisierte SQL-Leseabfragen.
+- `config`: Queue-, Listener-, Publisher- und Pufferkonfiguration.
+
+Der Writer-Weg ist `MessageConsumer` → `MessageReader` → `BatchWriteService` →
+`MessageRepository` → PostgreSQL, danach ACK. Controller und Dienste reichen hier
+aus; zusätzliche Router oder leere Interfaces würden keine weitere Aufgabe erfüllen.
+
+## Betrieb und Dokumente
+
+`docker compose down` erhält die Datenvolumes; `docker compose up -d` startet erneut.
+Kein `down -v` für normale Neustarts oder Abnahmeszenarien verwenden.
+Das Writer-Schema wird beim ersten PostgreSQL-Start mit leerem Datenvolume
+initialisiert. Eine geänderte `.env` initialisiert vorhandene Daten nicht neu.
+Der Chat-Service führt keine Schema-Initialisierung oder SQL-Schreibzugriffe aus.
+
+- [Spezifikation Bewertung 2](docs/spec-live-zustellung.md): eigene Darstellung des Lernenden und S1–S8.
+- [Umsetzungsplan Bewertung 2](docs/plan-live-zustellung.md): vor Code gepushter Plan, KI-Aufträge und Prüfnotizen.
+- [Spezifikation Bewertung 1](docs/spec-batch-writer.md), [Plan](docs/plan-batch-writer.md), [Abnahme](docs/abnahme-batch-writer.md): abgeschlossene Persistenzaufgabe.
+- [CLAUDE.md](CLAUDE.md): Regeln für lesbaren Code, deutsche Kommentare und Dokumentation.
+- [PLANUNG.md](PLANUNG.md), [grafischer Entwurf](docs/design/2026-08-28-chat-app-planung.html),
+  [Vorlagenplan](docs/plan-chat-service.md), [Flipchart](docs/flipchart-chat-app.png): historische Gesamtplanung;
+  die Bewertungsspezifikationen bestimmen den tatsächlichen Umfang.
+
+## Abgabe Bewertung 2
+
+Gleicher Fork wie bei Bewertung 1, fertiger Stand auf `main`, Tag `bewertung-2`
+auf dem geprüften Stand erstellen und pushen. Anschliessend Fork-Link im
+Abgabeportal einreichen. Termin laut Unterrichtsmitteilung: **13.11.2026 gegen
+Tagesende**. `bewertung-1` bleibt auf seinem ursprünglichen Stand.
+Eigene Tests belegen eigene Prüfungen; Lehrerskript und späteres Code-Review-Gespräch
+sind eigenständige Bewertungsteile und keine vorab garantierten Punkte.

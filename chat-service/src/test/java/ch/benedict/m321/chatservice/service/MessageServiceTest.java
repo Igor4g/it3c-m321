@@ -27,11 +27,13 @@ class MessageServiceTest {
         private ChatMessage published;
         private int publishCount;
 
+        /** Das Test-Doppel verwendet bewusst keine Netzwerkverbindung. */
         RecordingPublisher() {
             // Das Doppel benutzt das RabbitTemplate nie, deshalb null.
             super(null);
         }
 
+        /** Zeichnet Anzahl und Inhalt auf, statt wirkliche Nachrichten zu veröffentlichen. */
         @Override
         public void publish(ChatMessage message) {
             this.published = message;
@@ -39,6 +41,7 @@ class MessageServiceTest {
         }
     }
 
+    /** Identität und Zeitpunkt gehören zur serverseitigen Annahme. */
     @Test
     void assignsIdAndTimestamp() {
         RecordingPublisher publisher = new RecordingPublisher();
@@ -54,6 +57,7 @@ class MessageServiceTest {
         assertNotNull(response.sentAt());
     }
 
+    /** Die HTTP-Antwort muss auf genau die eine erzeugte Nachricht verweisen. */
     @Test
     void publishesExactlyOnceWithTheSameId() {
         RecordingPublisher publisher = new RecordingPublisher();
@@ -72,6 +76,7 @@ class MessageServiceTest {
         assertEquals("Hallo", publisher.published.content());
     }
 
+    /** Zwei Annahmen sind unterschiedliche Ereignisse, auch bei gleichem Inhalt. */
     @Test
     void assignsADifferentIdEveryTime() {
         RecordingPublisher publisher = new RecordingPublisher();
