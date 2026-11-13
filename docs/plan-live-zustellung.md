@@ -597,3 +597,89 @@ tatsächlichen Gespräch und wird nicht vorab als bestanden markiert.
 Vor dem Abgabe-Tag müssen alle vier geforderten Abgaben vorhanden sein. Der Plan
 und die eigenen Tests zielen auf 60 Punkte; ihre blosse Existenz garantiert weder
 die acht Ergebnisse des unbekannten Lehrerskripts noch die 16 Gesprächspunkte.
+
+## 8. Ergänzung nach unabhängiger Nachprüfung, 13.11.2026
+
+**Änderungsgrund:** Die unabhängige Nachprüfung des Tags `4cdcdb1` bestätigt S1–S8,
+findet aber eine verspätete Cursor-Kopie nach dem Replay, eine Abweichung zur
+Phasenreihenfolge der eigenen Spezifikation und verbliebene verschachtelte Aufrufe.
+Die bisherige Abnahme beweist diese zusätzlichen Fälle nicht. Der Lernende hat die
+Korrektur im Gespräch beauftragt. Der ursprüngliche Plan und die eigene
+Spezifikation bleiben erhalten; dieser Eintrag präzisiert die folgenden Arbeiten
+vor ihrer Umsetzung. Der veröffentlichte Tag wird dabei nicht still verschoben.
+
+### Nachprüfung N1 — Wiederaufnahme korrigieren
+
+**Ziel und Position:** Zuerst die bestätigten Fehler beheben, ohne den Vertrag der
+Spezifikation umzuschreiben. Das ersetzt für die Nachprüfung die gemeinsame
+Sortierung aus Abschnitt 3.2: fehlende Historie zuerst, danach während des Ladens
+eingetroffene Ereignisse in Empfangsreihenfolge, anschliessend Live.
+
+**Auftrag an die KI im Wortlaut:**
+
+> Ergänze reale Regressionstests für verspätete Kopien des Cursors und bekannter
+> Vorgänger sowie für Historie vor neu gepufferten Ereignissen mit älterer Uhrzeit.
+> Behalte den Cursor und begrenzte bekannte Vorgänger-IDs über den Live-Übergang.
+> Lies dafür höchstens LIVE_HISTORY_SIZE Vorgänger-IDs des Raums aus PostgreSQL
+> und ergänze beobachtete RAM-Vorgänger; halte die Ausschlussmenge insgesamt auf
+> LIVE_HISTORY_SIZE begrenzt, den Cursor immer eingeschlossen. Keine pauschale
+> Zeitfilterung neuer Live-Ereignisse. Verwende für die SQL-Lesevorbereitung eine
+> konsistente, nur lesende Repeatable-Read-Transaktion; fixiere deren Sicht mit
+> SELECT 1 vor möglicherweise blockierten Tabellenabfragen. Kein SQL unter der
+> Verteilungssperre oder im Live-Consumer. Sortiere nur die vorbereitete Historie,
+> hänge neue Ereignisse FIFO an und entferne Überschneidungen anhand ihrer ID.
+> Prüfe auch eine während des Ladens neu gespeicherte Nachricht mit älterer Zeit,
+> DB-Ausfall sowie einen Cursor bei ausgeschöpftem Duplikatfenster. Bewahre alle
+> bestehenden Nachrichten- und Queue-Grenzen. Keine neuen Produktfunktionen.
+
+**Begründung:** Bekannte IDs erlauben das Unterscheiden alter Kopien von neuen
+Nachrichten mit abweichender Uhrzeit. Ein konsistenter SQL-Lesestand verhindert,
+dass während des Nachladens neu gespeicherte IDs nachträglich zu alten Vorgängern
+erklärt werden. Die Ausschlussmenge ist begrenzt, keine globale Exactly-once-
+Garantie für beliebig alte IDs. DB-Ausfall muss weiterhin 503 nur bei Replay
+ergeben. Für diese Lesevorbereitung wird Spring TransactionTemplate verwendet,
+damit auch Verbindungsfehler beim Transaktionsbeginn in HTTP 503 übersetzt werden.
+
+**Test:** `mvn -pl chat-service test "-Dtest=StreamReconnectIntegrationTest,StreamSessionTest,MessageHistoryIntegrationTest"`.
+
+**Geprüft und korrigiert:** Noch nicht durchgeführt.
+
+### Nachprüfung N2 — Verschachtelte Aufrufe und Stil
+
+**Ziel und Position:** Nach der Verhaltenskorrektur den gesamten Chat-Service
+einschliesslich Tests gegen die tatsächlichen Regeln prüfen.
+
+**Auftrag an die KI im Wortlaut:**
+
+> Löse verschachtelte Methoden- und Konstruktorargumente sowie verkettete Aufrufe
+> im gesamten Java-Code des Chat-Service in benannte Zwischenergebnisse auf.
+> Erweitere CodeStyleTest um diese Syntaxprüfung; führe Lambda-Körper nicht so
+> aus, als wären sie unmittelbare Argumentauswertung. Prüfe die neuen Regeln auch
+> mit kleinen positiven und negativen Java-Beispielen. Kommentare bleiben deutsch,
+> Code englisch. Behaupte weiterhin nicht, dass ein Syntaxcheck alle Regeln zu
+> Sprache, Verständlichkeit und kurzen Methoden automatisch beweist.
+
+**Test:** CodeStyleTest und anschliessend `mvn clean test`, keine deaktivierten Tests.
+
+**Geprüft und korrigiert:** Noch nicht durchgeführt.
+
+### Nachprüfung N3 — Neue Abnahme und transparenter Abschluss
+
+**Ziel und Position:** Erst den korrigierten Stand erneut prüfen, dann die Abgabe-
+Entscheidung treffen. Alte Messwerte bleiben als historische Nachweise erkennbar.
+
+**Auftrag an die KI im Wortlaut:**
+
+> Ergänze README und Abnahmebericht mit den neuen Ergebnissen und ihren Grenzen.
+> Prüfe S1 und S2–S8 auf dem korrigierten Stand. Erhalte den laufenden Arbeitsstack;
+> verwende für zusätzliche Compose-Prüfungen einen isolierten Prüfstack mit
+> eigenem Netz, falls ein Unterbruch nicht ausdrücklich freigegeben ist. Weise die
+> Abweichung des Prüfnetznamens offen aus und prüfe chat-net der Originaldatei
+> getrennt. Committe Korrekturen thematisch mit deutschen Texten und KI-Trailer.
+> Bewahre bewertung-1. Vor Ersetzen des bereits veröffentlichten bewertung-2-Tags
+> muss eine ausdrückliche Zustimmung zum konkreten korrigierten Stand vorliegen.
+
+**Test:** Vollständiger Maven-Lauf, zusammenhängende Compose-Abnahme, Dateiausschlüsse,
+Sprache und Dokumentlinks. Keine erfundenen persönlichen Reviews.
+
+**Geprüft und korrigiert:** Noch nicht durchgeführt.
