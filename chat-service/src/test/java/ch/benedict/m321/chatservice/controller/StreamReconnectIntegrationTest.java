@@ -8,6 +8,8 @@ import ch.benedict.m321.chatservice.support.SseClient;
 import ch.benedict.m321.chatservice.support.TestChat;
 import ch.benedict.m321.chatservice.support.TestDatabase;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.ValueSource;
 import org.springframework.amqp.rabbit.core.RabbitTemplate;
 import org.testcontainers.DockerClientFactory;
 import org.testcontainers.containers.PostgreSQLContainer;
@@ -101,6 +103,62 @@ class StreamReconnectIntegrationTest {
                 resumed.assertQuiet(MILLISECONDS_200);
             }
         }
+    }
+
+    /** Beobachtete RAM-Positionen haben Vorrang vor gegenteiliger SQL-Zeit-/UUID-Sortierung. */
+    @ParameterizedTest
+    @ValueSource(booleans = {false, true})
+    void replaysPersistedObservedSuccessorDespiteOlderSqlPosition(boolean equalTime) throws Exception {
+        UUID room = UUID.randomUUID();
+        try (TestChat application = startApplication()) {
+            RecentMessageBuffer recent = application.context.getBean(RecentMessageBuffer.class);
+            RabbitTemplate publisher = application.context.getBean(RabbitTemplate.class);
+            Instant now = Instant.now();
+            Instant futureTime = now.plusSeconds(3600);
+            ChatMessage previous = storedMessage(room, futureTime, "previous despite newer clock");
+            publisher.convertAndSend(QueueNames.DELIVERY_EXCHANGE, "", previous);
+            awaitMessage(recent, previous);
+            TestDatabase.save(application, previous);
+            ChatMessage cursor = application.send(room, "cursor-sender", "received cursor");
+            awaitMessage(recent, cursor);
+            TestDatabase.save(application, cursor);
+            Instant cursorTime = cursor.sentAt();
+            Instant missingTime = cursorTime.minusSeconds(1);
+            UUID missingId = UUID.fromString("00000000-0000-0000-0000-000000000002");
+            if (equalTime) {
+                missingTime = cursorTime;
+                missingId = UUID.fromString("00000000-0000-0000-0000-000000000003");
+            }
+            ChatMessage missing = new ChatMessage(missingId, room, "delayed-sender",
+                    "Delayed Sender", "observed after cursor", missingTime);
+            publisher.convertAndSend(QueueNames.DELIVERY_EXCHANGE, "", missing);
+            awaitMessage(recent, missing);
+            TestDatabase.save(application, missing);
+            List<ChatMessage> expectedArrival = List.of(previous, cursor, missing);
+            List<ChatMessage> actualArrival = recent.snapshot();
+            assertEquals(expectedArrival, actualArrival);
+            try (SseClient resumed = reconnect(application, room, cursor)) {
+                ChatMessage fresh = application.send(room, "fresh-sender", "live marker");
+                List<ChatMessage> expectedMissing = List.of(missing);
+                List<ChatMessage> replayed = resumed.take(1, SECONDS_5);
+                assertEquals(expectedMissing, replayed);
+                List<ChatMessage> expectedFresh = List.of(fresh);
+                List<ChatMessage> live = resumed.take(1, SECONDS_5);
+                assertEquals(expectedFresh, live);
+                publisher.convertAndSend(QueueNames.DELIVERY_EXCHANGE, "", previous);
+                publisher.convertAndSend(QueueNames.DELIVERY_EXCHANGE, "", cursor);
+                publisher.convertAndSend(QueueNames.DELIVERY_EXCHANGE, "", missing);
+                resumed.assertQuiet(MILLISECONDS_300);
+            }
+        }
+    }
+
+    /** Wartet auf den tatsächlichen Consumer-Empfang, nicht auf eine angenommene Netzwerklaufzeit. */
+    private void awaitMessage(RecentMessageBuffer recent, ChatMessage message) {
+        UUID messageId = message.id();
+        var readiness = await();
+        var boundedWait = readiness.atMost(SECONDS_5);
+        boundedWait.until(() -> recent.find(messageId) != null);
     }
 
     /** Eine echte Tabellensperre hält SQL an, während der Live-Pfad weiterhin neue Ereignisse übernimmt. */

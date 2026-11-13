@@ -60,9 +60,14 @@ public class ReplayService {
             throw limitExceeded();
         }
         Set<UUID> excluded = predecessors(roomId, cursorId, recent);
+        Set<UUID> observedSuccessors = successors(roomId, cursorId, recent);
         int historySize = properties.historySize();
         List<UUID> storedPredecessors = history.beforeIds(roomId, cursor, historySize);
         for (UUID id : storedPredecessors) {
+            // Tatsächlich nach dem Cursor empfangen hat Vorrang vor der SQL-Zeitordnung.
+            if (observedSuccessors.contains(id)) {
+                continue;
+            }
             if (excluded.size() >= historySize) {
                 break;
             }
@@ -145,6 +150,22 @@ public class ReplayService {
         }
         excluded.add(cursorId);
         return excluded;
+    }
+
+    /** Nur ein vorhandener RAM-Cursor belegt, welche IDs dieses Raums tatsächlich danach ankamen. */
+    private Set<UUID> successors(UUID roomId, UUID cursorId, List<ChatMessage> recent) {
+        Set<UUID> successors = new HashSet<>();
+        boolean afterCursor = false;
+        for (ChatMessage message : recent) {
+            UUID messageId = message.id();
+            UUID messageRoom = message.roomId();
+            if (cursorId.equals(messageId)) {
+                afterCursor = true;
+            } else if (afterCursor && roomId.equals(messageRoom)) {
+                successors.add(messageId);
+            }
+        }
+        return successors;
     }
 
     /** ID-Abgleich entfernt alte Kopien und Überschneidungen, ohne neue alte Zeitstempel zu verwerfen. */

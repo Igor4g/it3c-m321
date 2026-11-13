@@ -760,4 +760,14 @@ demselben isolierten Stack. Persönlichen Stack nicht unterbrechen. Netzabweichu
 offen dokumentieren und Originalkonfiguration separat prüfen. Neue Ergebnisse
 mit Datum ergänzen; bereits veröffentlichte Tags nicht ohne neue Freigabe ersetzen.
 
-**Geprüft und korrigiert:** Noch nicht durchgeführt.
+**Geprüft und korrigiert:** 13.11.2026: Neuer Regressionstest zuerst gegen den
+unveränderten Fehlerstand ausgeführt, beide Varianten rot: statt des fehlenden
+Ereignisses kam nur die neue Live-Markierung. Anschliessend eine begrenzte Menge
+beobachteter RAM-Nachfolger ergänzt und diese IDs beim Hinzufügen von SQL-
+Vorgängern übersprungen. Keine neue Abfrage, kein neues Framework und keine
+Änderung der Ausschlussgrenze. Danach 17 Replay-/Sitzungs-/Stiltests grün, keine
+Fehler oder Auslassungen. Der Test prüft ältere Zeit und gleichen Zeitpunkt mit
+kleinerer UUID, einen tatsächlichen Vorgänger mit neuerer Uhr sowie anschliessende
+Live-Zustellung und Ausbleiben alter Kopien. Die bisherigen kalten Cursor- und
+Vorgängerfälle sowie SQL-/Live-Übergabe bleiben grün. Vollständige frische Abnahme
+und deren Ergebnisse folgen als eigener Nachtrag nach diesem Korrekturcommit.
