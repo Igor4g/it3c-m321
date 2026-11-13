@@ -5,6 +5,9 @@
 > aktuellen Abgabestatus. Sie sind keine erneut auszuführenden Arbeitsaufträge.
 > Der aktuelle Quelltext liegt in `chat-service/`; für Bewertung 1 gelten
 > [Writer-Plan](plan-batch-writer.md) und [Abnahmebericht](abnahme-batch-writer.md).
+> Bewertung 2 ergänzt SSE und einen SQL-Lesepfad gemäss
+> [Live-Spezifikation](spec-live-zustellung.md) und [Live-Plan](plan-live-zustellung.md).
+> Aussagen über einen fehlenden DB-Zugriff im folgenden Vorlagentext sind historisch.
 
 **Ziel:** Der `chat-service` nimmt eine Nachricht per `POST /messages` entgegen, vergibt UUID und Server-Zeitstempel und legt sie in beide Wege — Queue `chat.persist` und Fanout-Exchange `chat.delivery`.
 

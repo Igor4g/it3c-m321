@@ -517,7 +517,22 @@ Netznamen `chat-net`; parallele Stacks würden die Instanzzuordnung und DNS-Prü
 verfälschen. Der Prüfklon bekommt einen eigenen Compose-Projektnamen und damit
 eigene Datenvolumes. Innerhalb seiner Abnahme werden diese nicht zurückgesetzt.
 
-**Geprüft und korrigiert:** Noch nicht durchgeführt.
+**Geprüft und korrigiert:** 13.11.2026, frischer lokaler Git-Klon von
+`2a7cff5498dbb148d58056833c44cc779a339418`; sauberer versionierter Stand,
+.env ausschliesslich und bytegleich aus .env.example. Persönlichen Stack vorher
+ohne Volumenlöschung beendet; Prüfprojekt m321-b2-abnahme mit eigenen neuen Volumes.
+Zuerst S1: `mvn clean test`, 137 Tests, keine Fehler oder übersprungenen Tests,
+BUILD SUCCESS um 16:02:35. Danach S2–S8 zusammenhängend auf demselben Stack grün,
+Exit-Code 0. Vier Dienste ohne Host-Ports; S3 400/400/0; S4 Queue-Entfernung
+in 8.772 s; S5 922 ms ab erstem POST, danach genau dieselben 100 IDs gespeichert;
+S6 alle 5000, maximal 1000 inklusive unbestätigter Lieferung und neue Zustellung
+nach Fortsetzen; S7 exakt 50 nach 10 s und anschliessend Live; S8 erfolgreich.
+Die zusätzlichen Bereitschafts-/Artefaktkorrekturen aus Schritt 7 sind damit real
+geprüft. Keine weitere Anwendungskorrektur nötig. Messwerte, Räume und Grenzen
+stehen im Abnahmebericht; abschliessend nur Dokumentation ergänzt.
+Der Lernende hat den persönlichen Review und die Annahme von Schritt 8 und
+Schlussbericht am 13.11.2026 im Gespräch bestätigt. Anschliessend den Prüfstack
+ohne Volumenlöschung beendet und den persönlichen Arbeitsstack wieder gestartet.
 
 ## 5. Veröffentlichung und Abgabe nach erfolgreicher Prüfung
 

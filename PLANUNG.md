@@ -2,6 +2,12 @@
 
 **Modul M321 · Klasse IT3c · 28.08.2026**
 
+> **Ergänzung für Bewertung 2, 13.11.2026:** Der aktuelle Live-/SSE-Lesepfad
+> steht in der [eigenen Spezifikation](docs/spec-live-zustellung.md) und im
+> [vorab veröffentlichten Umsetzungsplan](docs/plan-live-zustellung.md).
+> Der folgende Gesamtentwurf und die Einordnung zu Bewertung 1 bleiben historisch
+> erhalten; sie sind kein aktueller Funktions- oder Abnahmebericht für Bewertung 2.
+
 > **Einordnung für Bewertung 1, Stand 30.09.2026:** Dieses Dokument ist der
 > ursprüngliche Gesamtentwurf, keine Liste bereits implementierter Funktionen.
 > Es bleibt erhalten, weil der Bewertungsauftrag insbesondere auf das Datenmodell

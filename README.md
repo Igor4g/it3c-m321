@@ -8,12 +8,13 @@ Live-Zustellung und Wiederaufnahme im bestehenden Chat-Service.
 
 | Baustein | Technologie | Aufgabe | Stand |
 |---|---|---|---|
-| chat-service | Java 21, Spring Boot 3 | POST, eigene Fanout-Queue, SSE je Raum und Wiederaufnahme | implementiert; 137 Gesamttests und Compose S2–S8 grün |
+| chat-service | Java 21, Spring Boot 3 | POST, eigene Fanout-Queue, SSE je Raum und Wiederaufnahme | 36 Anwendungstests und Compose S2–S8 grün |
 | rabbitmq | RabbitMQ 3.13 | Dauerhafte Persistenz-Queue und eigene Live-Kopie je Chat-Instanz | in Compose eingebunden |
-| batch-writer | Java 21, Spring Boot 3 | Einziger SQL-Schreiber, ACK nach COMMIT | Bewertung 1 abgeschlossen |
+| batch-writer | Java 21, Spring Boot 3 | Einziger SQL-Schreiber, ACK nach COMMIT | Bewertung 1 abgeschlossen; 101 Tests grün |
 | postgres | PostgreSQL 16 | Dauerhafter Verlauf; Chat-Service liest, Writer schreibt | Schema und Datenvolume vorhanden |
 
-Die eigene Compose-Schlussabnahme für Bewertung 2 wird getrennt dokumentiert.
+Die eigene Schlussabnahme für Bewertung 2 steht im
+[Abnahmebericht](docs/abnahme-live-zustellung.md).
 Login/Keycloak, Gateway, Oberfläche, Raumverwaltung sowie Gelesen- und
 Geliefert-Status gehören nicht zu dieser Abgabe. Das spätere allgemeine Lastziel
 von 100'000 Nachrichten pro Minute wird nicht als erreicht behauptet.
@@ -161,6 +162,7 @@ Der Chat-Service führt keine Schema-Initialisierung oder SQL-Schreibzugriffe au
 
 - [Spezifikation Bewertung 2](docs/spec-live-zustellung.md): eigene Darstellung des Lernenden und S1–S8.
 - [Umsetzungsplan Bewertung 2](docs/plan-live-zustellung.md): vor Code gepushter Plan, KI-Aufträge und Prüfnotizen.
+- [Abnahme Bewertung 2](docs/abnahme-live-zustellung.md): geprüfter Commit, Befehle, Messwerte und Grenzen.
 - [Spezifikation Bewertung 1](docs/spec-batch-writer.md), [Plan](docs/plan-batch-writer.md), [Abnahme](docs/abnahme-batch-writer.md): abgeschlossene Persistenzaufgabe.
 - [CLAUDE.md](CLAUDE.md): Regeln für lesbaren Code, deutsche Kommentare und Dokumentation.
 - [PLANUNG.md](PLANUNG.md), [grafischer Entwurf](docs/design/2026-08-28-chat-app-planung.html),
