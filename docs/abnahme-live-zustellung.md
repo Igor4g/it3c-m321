@@ -1,5 +1,11 @@
 # Eigene Abnahme — Bewertung 2: Live-Zustellung
 
+> Historischer Nachweis der ersten Abgabe. Die spätere unabhängige Prüfung fand
+> zusätzliche Replay-Fehler und eine Lücke im Stilcheck, die diese Szenarien nicht
+> aufdeckten. Korrekturen und aktuelle Ergebnisse stehen in der
+> [Nachprüfung](nachpruefung-live-zustellung.md). Die folgenden Messwerte bleiben
+> unverändert dem damals geprüften Commit zugeordnet.
+
 **Eigene Schlussprüfung vom 13.11.2026, Europe/Zurich: S1–S8 im frischen Klon bestanden.**
 
 ## Geprüfter Stand und Umgebung

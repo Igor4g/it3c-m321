@@ -4,17 +4,23 @@ Lernprojekt zum Modul **M321 Verteilte Systeme programmieren**, Klasse IT3c.
 Bewertung 1 ergänzt den Batch-Writer; Bewertung 2 ergänzt die raumbezogene
 Live-Zustellung und Wiederaufnahme im bestehenden Chat-Service.
 
+Die [Nachprüfung vom 13.11.2026](docs/nachpruefung-live-zustellung.md) dokumentiert
+Korrekturen nach der ersten Abgabe: Cursor-Ausschlüsse, Übergabereihenfolge und
+eine erweiterte Stilprüfung. Neue Commits ändern den Abgabetag `bewertung-2`
+nicht automatisch; für die Bewertung zählt dessen tatsächlich veröffentlichter Stand.
+
 ## Stand
 
 | Baustein | Technologie | Aufgabe | Stand |
 |---|---|---|---|
-| chat-service | Java 21, Spring Boot 3 | POST, eigene Fanout-Queue, SSE je Raum und Wiederaufnahme | 36 Anwendungstests und Compose S2–S8 grün |
+| chat-service | Java 21, Spring Boot 3 | POST, eigene Fanout-Queue, SSE je Raum und Wiederaufnahme | 39 Anwendungstests; korrigierte Abnahme siehe Nachprüfung |
 | rabbitmq | RabbitMQ 3.13 | Dauerhafte Persistenz-Queue und eigene Live-Kopie je Chat-Instanz | in Compose eingebunden |
 | batch-writer | Java 21, Spring Boot 3 | Einziger SQL-Schreiber, ACK nach COMMIT | Bewertung 1 abgeschlossen; 101 Tests grün |
 | postgres | PostgreSQL 16 | Dauerhafter Verlauf; Chat-Service liest, Writer schreibt | Schema und Datenvolume vorhanden |
 
-Die eigene Schlussabnahme für Bewertung 2 steht im
-[Abnahmebericht](docs/abnahme-live-zustellung.md).
+Die erste eigene Schlussabnahme für Bewertung 2 steht im
+[Abnahmebericht](docs/abnahme-live-zustellung.md), die spätere Korrekturprüfung in der
+[Nachprüfung](docs/nachpruefung-live-zustellung.md).
 Login/Keycloak, Gateway, Oberfläche, Raumverwaltung sowie Gelesen- und
 Geliefert-Status gehören nicht zu dieser Abgabe. Das spätere allgemeine Lastziel
 von 100'000 Nachrichten pro Minute wird nicht als erreicht behauptet.
@@ -47,8 +53,9 @@ docker compose up -d --scale chat-service=2
 
 `mvn clean test` prüft beide Module in einem Lauf: Writer-Fehlerfälle,
 echte HTTP-/RabbitMQ-Verteilung an zwei Instanzen und Wiederaufnahme mit PostgreSQL.
-Der eigene Gesamtlauf vom 13.11.2026 umfasst 137 erfolgreiche Tests ohne Auslassungen.
-`CodeStyleTest` prüft Zweckkommentare an Klassen/Methoden und das Java-Stream-Verbot;
+Der korrigierte Gesamtlauf vom 13.11.2026 umfasst 140 erfolgreiche Tests ohne Auslassungen.
+`CodeStyleTest` prüft Zweckkommentare an Klassen/Methoden, das Java-Stream-Verbot,
+verschachtelte Methoden-/Konstruktorargumente und Empfängerketten;
 deutsche Sprache und Verständlichkeit werden zusätzlich manuell geprüft.
 Die Maven-Testcontainer verwenden eigene, vorübergehende Ports. Das ändert die
 portfreie Produktionskonfiguration in Compose nicht.
@@ -97,16 +104,29 @@ werden anhand der ID zusammengeführt; der Cursor selbst wird nicht erneut gesen
 Der jüngste Puffer schliesst die Verzögerung des Writers. Während des DB-Ladens
 werden neue Ereignisse bereits für die Verbindung gesammelt.
 
-Nachlieferung ist nach `sentAt`, bei Gleichstand nach kanonischer UUID sortiert.
+Die vorbereitete Historie wird nach `sentAt`, bei Gleichstand nach kanonischer UUID
+sortiert. Während des Ladens neu eingetroffene Ereignisse folgen danach in
+Empfangsreihenfolge; sie werden nicht vor die Historie sortiert.
 Live bleibt pro Verbindung FIFO; innerhalb einer Instanz werden Annahme und
 Publikation geordnet. Eine globale Reihenfolge konkurrierender Instanzen oder
 unbegrenztes Exactly-once wird nicht versprochen.
+
+Technische Präzisierung der Nachprüfung: `id` und `roomId` sind UUIDs;
+`senderId`, `senderName` und `content` sind Zeichenfolgen. `sentAt` ist ein
+ISO-8601-UTC-Zeitpunkt, vom Server mit Mikrosekundenpräzision vergeben.
+Für den Stream werden kanonische UUIDs mit 36 Zeichen geprüft; Gross- und
+Kleinschreibung ist zulässig. `Last-Event-ID` enthält genau die Cursor-UUID.
 
 ## Grenzen und Fehler
 
 `LIVE_HISTORY_SIZE`, `LIVE_CLIENT_BUFFER_SIZE` und `LIVE_REPLAY_LIMIT` sind jeweils
 standardmässig 10'000 Nachrichten. Sie begrenzen unterschiedliche Anwendungspuffer;
 die RabbitMQ-Grenze bleibt unabhängig davon 999 plus eins.
+Je wiederaufgenommener Verbindung bleiben zusätzlich höchstens `LIVE_HISTORY_SIZE`
+bekannte alte IDs einschliesslich Cursor erhalten. Diese Ausschlüsse bleiben beim
+Verschieben des rollenden Live-Duplikatfensters bestehen. Es sind begrenzte
+ID-Metadaten, keine weiteren 10'000 Nachrichtenkopien. Unbekannte, beliebig alte
+Broker-Duplikate ausserhalb dieses Fensters werden nicht allgemein erkannt.
 Eine langsame Verbindung hat ihren eigenen Ausgabe-Worker und Puffer. Bei Überlauf
 wird diese Verbindung beendet, ohne andere Clients aufzuhalten.
 
@@ -163,6 +183,7 @@ Der Chat-Service führt keine Schema-Initialisierung oder SQL-Schreibzugriffe au
 - [Spezifikation Bewertung 2](docs/spec-live-zustellung.md): eigene Darstellung des Lernenden und S1–S8.
 - [Umsetzungsplan Bewertung 2](docs/plan-live-zustellung.md): vor Code gepushter Plan, KI-Aufträge und Prüfnotizen.
 - [Abnahme Bewertung 2](docs/abnahme-live-zustellung.md): geprüfter Commit, Befehle, Messwerte und Grenzen.
+- [Nachprüfung Bewertung 2](docs/nachpruefung-live-zustellung.md): Korrekturen nach unabhängiger Prüfung und neue Ergebnisse.
 - [Spezifikation Bewertung 1](docs/spec-batch-writer.md), [Plan](docs/plan-batch-writer.md), [Abnahme](docs/abnahme-batch-writer.md): abgeschlossene Persistenzaufgabe.
 - [CLAUDE.md](CLAUDE.md): Regeln für lesbaren Code, deutsche Kommentare und Dokumentation.
 - [PLANUNG.md](PLANUNG.md), [grafischer Entwurf](docs/design/2026-08-28-chat-app-planung.html),

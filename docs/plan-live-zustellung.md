@@ -708,4 +708,20 @@ Entscheidung treffen. Alte Messwerte bleiben als historische Nachweise erkennbar
 **Test:** Vollständiger Maven-Lauf, zusammenhängende Compose-Abnahme, Dateiausschlüsse,
 Sprache und Dokumentlinks. Keine erfundenen persönlichen Reviews.
 
-**Geprüft und korrigiert:** Noch nicht durchgeführt.
+**Geprüft und korrigiert:** 13.11.2026, frischer Klon von
+`e325883449ae16ed0ea34ea09952edde060183ee`; .env bytegleich aus .env.example.
+Maven-Gesamtlauf um 18:52:09 grün: 140 Tests, keine Fehler oder Auslassungen.
+Anschliessend S2–S8 auf demselben neuen isolierten Stack vollständig grün,
+Exit-Code 0. Nur Netzname und externe Treiberpfade angepasst; diese Qualifikation
+steht ausdrücklich im Nachprüfbericht. Node-Client und Produktcode unverändert.
+S3 400/400/0; S4 Queue-Entfernung in 4.774 s; S5 513 ms und danach dieselben
+100 IDs gespeichert; S6 alle 5000, Maximum ready + unacked 1000, neue Zustellung
+nach Fortsetzen; S7 genau 50 nach 10 s und anschliessend Live; erweiterter S8 grün.
+Originales chat-net, fehlende Host-Ports und Skalierbarkeit separat bestätigt.
+Container-IDs und Startzeiten der vier persönlichen Dienste vorher/nachher gleich.
+Nur eigener Prüfstack ohne Volumenlöschung beendet. Eigene Spezifikation und alle
+ursprünglichen Planabschnitte unverändert; alte Abnahme historisch eingeordnet,
+README und neuer Nachprüfbericht ergänzt. Deutsch/Englisch und lokale Links
+geprüft. Anwendung und Tests nach dem Prüfcommit unverändert.
+Veröffentlichter main/bewertung-2 bleiben bis zur ausdrücklichen Entscheidung
+zum Tagwechsel beim bisherigen Stand. Kein persönlicher Review vorweggenommen.
