@@ -2,12 +2,17 @@ package ch.benedict.m321.chatservice.config;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
 import org.springframework.amqp.core.FanoutExchange;
+import org.springframework.amqp.core.AnonymousQueue;
+import org.springframework.amqp.core.Binding;
+import org.springframework.amqp.core.BindingBuilder;
 import org.springframework.amqp.core.Queue;
 import org.springframework.amqp.core.QueueBuilder;
 import org.springframework.amqp.support.converter.Jackson2JsonMessageConverter;
 import org.springframework.amqp.support.converter.MessageConverter;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
+
+import java.util.Map;
 
 /**
  * Legt beim Start alles an, was der Broker braucht.
@@ -46,6 +51,21 @@ public class RabbitConfig {
     @Bean
     public FanoutExchange deliveryExchange() {
         return new FanoutExchange(QueueNames.DELIVERY_EXCHANGE, true, false);
+    }
+
+    /** Jede Instanz braucht ihre eigene Kopie; beim Verbindungsende verschwindet ihre Queue. */
+    @Bean
+    public Queue liveQueue() {
+        Map<String, Object> arguments = Map.of(
+                "x-max-length", 999,
+                "x-overflow", "drop-head");
+        return new AnonymousQueue(arguments);
+    }
+
+    /** Bindet nur die kurzlebige Instanz-Queue an den vorhandenen Zustellweg. */
+    @Bean
+    public Binding liveBinding(Queue liveQueue, FanoutExchange deliveryExchange) {
+        return BindingBuilder.bind(liveQueue).to(deliveryExchange);
     }
 
     /**

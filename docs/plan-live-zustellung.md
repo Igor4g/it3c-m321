@@ -218,7 +218,16 @@ Prüfen: zwei getrennte Queues, richtige Bindungen/Argumente, Eigentum und Entfe
 beim Schliessen einer Instanz; keine Änderung an `chat.persist`/`chat.dlq`.
 Die Prüfung von genau einem aktiven Consumer wird mit Schritt 2 vervollständigt.
 
-**Geprüft und korrigiert:** Noch nicht durchgeführt.
+**Geprüft und korrigiert:** 13.11.2026, KI-Selbstprüfung mit dem angegebenen
+Maven-Befehl: 1 Test, 0 Fehler, 0 übersprungen; echter RabbitMQ und zwei Spring-
+Kontexte. Queue-Eigenschaften, tatsächliche Bindungen und Entfernen nach Schliessen
+geprüft. Korrigiert: dynamischen Testcontainer-Port als Kommandozeilen-Eigenschaft
+statt niedrig priorisierter Default-Property übergeben. Docker Desktop war zuerst
+ausgeschaltet und wurde gestartet; kein Test wurde deshalb deaktiviert.
+Vorgezogener Plan-Push: `27f50377136778096ec592ffe2b750697440c956`, mit GitHub-main
+vor dem ersten Code-Patch verglichen. Der Gesamtauftrag wurde vom Lernenden
+freigegeben; ein gesonderter persönlicher Code-Review dieses Schritts ist noch
+nicht als erfolgt bestätigt.
 
 ### Schritt 2 — SSE, Raumfilter und Consumer
 
