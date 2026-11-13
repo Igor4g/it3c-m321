@@ -19,13 +19,16 @@ public final class TestDatabase {
 
     /** Der Testcontainer initialisiert genau das produktive Tabellenschema. */
     public static PostgreSQLContainer<?> create() {
-        PostgreSQLContainer<?> container = new PostgreSQLContainer<>("postgres:16-alpine")
-                .withDatabaseName("chat").withUsername("chat").withPassword("chat")
-                .withInitScript("schema.sql");
+        PostgreSQLContainer<?> container = new PostgreSQLContainer<>("postgres:16-alpine");
+        container = container.withDatabaseName("chat");
+        container = container.withUsername("chat");
+        container = container.withPassword("chat");
+        container = container.withInitScript("schema.sql");
         // Docker muss beim Ausfalltest denselben Testport erneut binden.
         try (ServerSocket socket = new ServerSocket(0)) {
             int port = socket.getLocalPort();
-            container.setPortBindings(List.of(port + ":5432"));
+            List<String> portBindings = List.of(port + ":5432");
+            container.setPortBindings(portBindings);
         } catch (IOException exception) {
             throw new IllegalStateException("Cannot reserve a test database port", exception);
         }
@@ -45,8 +48,14 @@ public final class TestDatabase {
     /** Nur Testvorbereitung schreibt direkt; die produktive Repository-Klasse enthält ausschliesslich SELECT. */
     public static void save(TestChat application, ChatMessage message) {
         JdbcTemplate jdbc = application.context.getBean(JdbcTemplate.class);
-        OffsetDateTime timestamp = OffsetDateTime.ofInstant(message.sentAt(), ZoneOffset.UTC);
+        var sentAt = message.sentAt();
+        OffsetDateTime timestamp = OffsetDateTime.ofInstant(sentAt, ZoneOffset.UTC);
+        var messageId = message.id();
+        var roomId = message.roomId();
+        String senderId = message.senderId();
+        String senderName = message.senderName();
+        String content = message.content();
         jdbc.update("INSERT INTO message (id, room_id, sender_id, sender_name, content, sent_at) VALUES (?, ?, ?, ?, ?, ?)",
-                message.id(), message.roomId(), message.senderId(), message.senderName(), message.content(), timestamp);
+                messageId, roomId, senderId, senderName, content, timestamp);
     }
 }

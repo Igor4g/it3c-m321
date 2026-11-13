@@ -24,6 +24,7 @@ public class MessageExceptionHandler {
         log.error("Broker not reachable, message rejected", exception);
 
         String body = "Nachricht nicht gesendet: der Broker ist nicht erreichbar.";
-        return ResponseEntity.status(HttpStatus.SERVICE_UNAVAILABLE).body(body);
+        ResponseEntity.BodyBuilder responseBuilder = ResponseEntity.status(HttpStatus.SERVICE_UNAVAILABLE);
+        return responseBuilder.body(body);
     }
 }

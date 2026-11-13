@@ -33,6 +33,13 @@ import static org.junit.jupiter.api.Assertions.*;
 @Testcontainers
 class StreamReconnectIntegrationTest {
 
+    // Gleiche Testfristen werden gemeinsam benannt statt pro Aufruf wiederholt.
+    private static final Duration SECONDS_5 = Duration.ofSeconds(5);
+    private static final Duration MILLISECONDS_200 = Duration.ofMillis(200);
+    private static final Duration SECONDS_3 = Duration.ofSeconds(3);
+    private static final Duration MILLISECONDS_300 = Duration.ofMillis(300);
+
+
     @Container
     static PostgreSQLContainer<?> database = TestDatabase.create();
 
@@ -50,7 +57,9 @@ class StreamReconnectIntegrationTest {
             try (SseClient initial = new SseClient(first, room, null)) {
                 cursor = first.send(room, "sender", "cursor");
                 TestDatabase.save(first, cursor);
-                assertEquals(cursor, initial.take(1, Duration.ofSeconds(5)).getFirst());
+                var receivedMessages = initial.take(1, SECONDS_5);
+                var receivedMessage = receivedMessages.getFirst();
+                assertEquals(cursor, receivedMessage);
             }
             List<ChatMessage> expected = new ArrayList<>();
             for (int index = 0; index < 50; index++) {
@@ -60,12 +69,15 @@ class StreamReconnectIntegrationTest {
             }
             // Die zehn Sekunden gehören zum ausdrücklich vorgegebenen Szenario.
             Thread.sleep(10_000);
-            try (SseClient resumed = new SseClient(second, room, cursor.id().toString())) {
-                assertEquals(expected, resumed.take(50, Duration.ofSeconds(5)));
-                resumed.assertQuiet(Duration.ofMillis(200));
+            try (SseClient resumed = reconnect(second, room, cursor)) {
+                var receivedMessages2 = resumed.take(50, SECONDS_5);
+                assertEquals(expected, receivedMessages2);
+                resumed.assertQuiet(MILLISECONDS_200);
                 ChatMessage next = first.send(room, "sender", "live again");
-                assertEquals(next, resumed.take(1, Duration.ofSeconds(5)).getFirst());
-                resumed.assertQuiet(Duration.ofMillis(200));
+                var receivedMessages3 = resumed.take(1, SECONDS_5);
+                var receivedMessage2 = receivedMessages3.getFirst();
+                assertEquals(next, receivedMessage2);
+                resumed.assertQuiet(MILLISECONDS_200);
             }
         }
     }
@@ -74,14 +86,19 @@ class StreamReconnectIntegrationTest {
     @Test
     void includesCursorAndMessagesNotYetStoredByWriter() throws Exception {
         UUID room = UUID.randomUUID();
-        try (TestChat application = new TestChat(broker, TestDatabase.arguments(database))) {
+        try (TestChat application = startApplication()) {
             ChatMessage cursor = application.send(room, "sender", "not stored cursor");
             ChatMessage missing = application.send(room, "sender", "not stored message");
             RecentMessageBuffer recent = application.context.getBean(RecentMessageBuffer.class);
-            await().atMost(Duration.ofSeconds(5)).until(() -> recent.find(missing.id()) != null);
-            try (SseClient resumed = new SseClient(application, room, cursor.id().toString())) {
-                assertEquals(List.of(missing), resumed.take(1, Duration.ofSeconds(5)));
-                resumed.assertQuiet(Duration.ofMillis(200));
+            var readiness = await();
+            var boundedWait = readiness.atMost(SECONDS_5);
+            UUID missingId = missing.id();
+            boundedWait.until(() -> recent.find(missingId) != null);
+            try (SseClient resumed = reconnect(application, room, cursor)) {
+                var expectedValues = List.of(missing);
+                var receivedMessages = resumed.take(1, SECONDS_5);
+                assertEquals(expectedValues, receivedMessages);
+                resumed.assertQuiet(MILLISECONDS_200);
             }
         }
     }
@@ -90,10 +107,12 @@ class StreamReconnectIntegrationTest {
     @Test
     void buffersNewEventsWhileHistoryIsLoadingIncludingOlderForeignTimestamp() throws Exception {
         UUID room = UUID.randomUUID();
-        try (TestChat application = new TestChat(broker, TestDatabase.arguments(database));
+        try (TestChat application = startApplication();
              var requests = Executors.newVirtualThreadPerTaskExecutor()) {
-            ChatMessage cursor = storedMessage(room, Instant.parse("2026-11-13T10:00:00Z"), "cursor");
-            Instant historyTime = cursor.sentAt().plusSeconds(1);
+            var timestamp = Instant.parse("2026-11-13T10:00:00Z");
+            ChatMessage cursor = storedMessage(room, timestamp, "cursor");
+            var sentAtResult = cursor.sentAt();
+            Instant historyTime = sentAtResult.plusSeconds(1);
             ChatMessage historical = storedMessage(room, historyTime, "missing before loading");
             TestDatabase.save(application, cursor);
             TestDatabase.save(application, historical);
@@ -102,21 +121,29 @@ class StreamReconnectIntegrationTest {
             try (Connection lock = source.getConnection()) {
                 lock.setAutoCommit(false);
                 lockTable(lock);
-                var future = requests.submit(() -> new SseClient(application, room, cursor.id().toString()));
+                var future = requests.submit(() -> reconnect(application, room, cursor));
                 List<ChatMessage> expected;
                 java.util.concurrent.Future<?> write = null;
                 try {
-                    await().atMost(Duration.ofSeconds(3)).until(() -> streams.connectionCount() == 1);
-                    assertFalse(future.isDone(), "The DB query must still be blocked");
+                    var readiness = await();
+                    var boundedWait = readiness.atMost(SECONDS_3);
+                    boundedWait.until(() -> streams.connectionCount() == 1);
+                    var isDoneResult = future.isDone();
+                    assertFalse(isDoneResult, "The DB query must still be blocked");
                     ChatMessage first = application.send(room, "sender", "arrived during SQL");
                     ChatMessage second = application.send(room, "sender", "arrived afterwards");
-                    Instant oldTime = cursor.sentAt().minusSeconds(1);
-                    ChatMessage delayed = new ChatMessage(UUID.randomUUID(), room, "late-sender",
+                    var sentAtResult2 = cursor.sentAt();
+                    Instant oldTime = sentAtResult2.minusSeconds(1);
+                    var messageId = UUID.randomUUID();
+                    ChatMessage delayed = new ChatMessage(messageId, room, "late-sender",
                             "Late Sender", "late event with older time", oldTime);
                     RabbitTemplate publisher = application.context.getBean(RabbitTemplate.class);
                     publisher.convertAndSend(QueueNames.DELIVERY_EXCHANGE, "", delayed);
                     RecentMessageBuffer recent = application.context.getBean(RecentMessageBuffer.class);
-                    await().atMost(Duration.ofSeconds(3)).until(() -> recent.find(delayed.id()) != null);
+                    var readiness2 = await();
+                    var boundedWait2 = readiness2.atMost(SECONDS_3);
+                    UUID delayedId = delayed.id();
+                    boundedWait2.until(() -> recent.find(delayedId) != null);
                     // Der neue alte Zeitstempel wird zusätzlich gespeichert, sobald die Sperre frei ist.
                     write = requests.submit(() -> TestDatabase.save(application, delayed));
                     expected = List.of(historical, first, second, delayed);
@@ -125,10 +152,13 @@ class StreamReconnectIntegrationTest {
                 }
                 try (SseClient resumed = future.get(10, TimeUnit.SECONDS)) {
                     write.get(10, TimeUnit.SECONDS);
-                    assertEquals(expected, resumed.take(4, Duration.ofSeconds(5)));
-                    resumed.assertQuiet(Duration.ofMillis(200));
+                    var receivedMessages = resumed.take(4, SECONDS_5);
+                    assertEquals(expected, receivedMessages);
+                    resumed.assertQuiet(MILLISECONDS_200);
                     ChatMessage next = application.send(room, "sender", "live after transition");
-                    assertEquals(next, resumed.take(1, Duration.ofSeconds(5)).getFirst());
+                    var receivedMessages2 = resumed.take(1, SECONDS_5);
+                    var receivedMessage = receivedMessages2.getFirst();
+                    assertEquals(next, receivedMessage);
                 }
             }
         }
@@ -144,12 +174,18 @@ class StreamReconnectIntegrationTest {
             ChatMessage cursor = storedMessage(room, time, "cursor");
             TestDatabase.save(application, cursor);
             for (int index = 1; index <= 3; index++) {
-                ChatMessage message = storedMessage(room, time.plusSeconds(index), "missing");
+                var plusSecondsResult = time.plusSeconds(index);
+                ChatMessage message = storedMessage(room, plusSecondsResult, "missing");
                 TestDatabase.save(application, message);
             }
-            assertEquals(409, application.get("/stream?roomId=" + room, cursor.id().toString()).statusCode());
+            var messageId = cursor.id();
+            var text = messageId.toString();
+            var response = application.get("/stream?roomId=" + room, text);
+            var statusCode2 = response.statusCode();
+            assertEquals(409, statusCode2);
             StreamService streams = application.context.getBean(StreamService.class);
-            assertEquals(0, streams.connectionCount());
+            var connectionCount2 = streams.connectionCount();
+            assertEquals(0, connectionCount2);
         }
     }
 
@@ -157,19 +193,24 @@ class StreamReconnectIntegrationTest {
     @Test
     void ignoresBrokerCopyAlreadyReadFromDatabase() throws Exception {
         UUID room = UUID.randomUUID();
-        try (TestChat application = new TestChat(broker, TestDatabase.arguments(database))) {
+        try (TestChat application = startApplication()) {
             Instant time = Instant.parse("2026-11-13T10:00:00Z");
             ChatMessage cursor = storedMessage(room, time, "cursor");
-            ChatMessage missing = storedMessage(room, time.plusSeconds(1), "already stored");
+            var plusSecondsResult = time.plusSeconds(1);
+            ChatMessage missing = storedMessage(room, plusSecondsResult, "already stored");
             TestDatabase.save(application, cursor);
             TestDatabase.save(application, missing);
-            try (SseClient resumed = new SseClient(application, room, cursor.id().toString())) {
-                assertEquals(missing, resumed.take(1, Duration.ofSeconds(5)).getFirst());
+            try (SseClient resumed = reconnect(application, room, cursor)) {
+                var receivedMessages = resumed.take(1, SECONDS_5);
+                var receivedMessage = receivedMessages.getFirst();
+                assertEquals(missing, receivedMessage);
                 RabbitTemplate publisher = application.context.getBean(RabbitTemplate.class);
                 publisher.convertAndSend(QueueNames.DELIVERY_EXCHANGE, "", missing);
-                resumed.assertQuiet(Duration.ofMillis(300));
+                resumed.assertQuiet(MILLISECONDS_300);
                 ChatMessage next = application.send(room, "sender", "new after duplicate");
-                assertEquals(next, resumed.take(1, Duration.ofSeconds(5)).getFirst());
+                var receivedMessages2 = resumed.take(1, SECONDS_5);
+                var receivedMessage2 = receivedMessages2.getFirst();
+                assertEquals(next, receivedMessage2);
             }
         }
     }
@@ -192,20 +233,21 @@ class StreamReconnectIntegrationTest {
             UUID cursorId = cursor.id();
             String lastId = cursorId.toString();
             try (SseClient resumed = new SseClient(application, room, lastId)) {
-                Duration timeout = Duration.ofSeconds(5);
-                List<ChatMessage> received = resumed.take(1, timeout);
-                assertEquals(List.of(missing), received);
+                List<ChatMessage> received = resumed.take(1, SECONDS_5);
+                var expectedValues = List.of(missing);
+                assertEquals(expectedValues, received);
                 RabbitTemplate publisher = application.context.getBean(RabbitTemplate.class);
                 publisher.convertAndSend(QueueNames.DELIVERY_EXCHANGE, "", missing);
                 publisher.convertAndSend(QueueNames.DELIVERY_EXCHANGE, "", previous);
                 publisher.convertAndSend(QueueNames.DELIVERY_EXCHANGE, "", cursor);
-                resumed.assertQuiet(Duration.ofMillis(300));
+                resumed.assertQuiet(MILLISECONDS_300);
                 Instant olderTime = time.minusSeconds(1);
                 ChatMessage genuinelyNew = storedMessage(room, olderTime, "new id despite older clock");
                 publisher.convertAndSend(QueueNames.DELIVERY_EXCHANGE, "", genuinelyNew);
-                List<ChatMessage> newMessages = resumed.take(1, timeout);
-                assertEquals(List.of(genuinelyNew), newMessages);
-                resumed.assertQuiet(Duration.ofMillis(200));
+                List<ChatMessage> newMessages = resumed.take(1, SECONDS_5);
+                var expectedValues2 = List.of(genuinelyNew);
+                assertEquals(expectedValues2, newMessages);
+                resumed.assertQuiet(MILLISECONDS_200);
             }
         }
     }
@@ -214,12 +256,24 @@ class StreamReconnectIntegrationTest {
     @Test
     void rejectsInvalidUnknownAndForeignCursors() throws Exception {
         UUID room = UUID.randomUUID();
-        try (TestChat application = new TestChat(broker, TestDatabase.arguments(database))) {
-            assertEquals(400, application.get("/stream?roomId=" + room, "bad-id").statusCode());
-            assertEquals(404, application.get("/stream?roomId=" + room, UUID.randomUUID().toString()).statusCode());
-            ChatMessage foreign = storedMessage(UUID.randomUUID(), Instant.now(), "foreign");
+        try (TestChat application = startApplication()) {
+            var response = application.get("/stream?roomId=" + room, "bad-id");
+            var statusCode2 = response.statusCode();
+            assertEquals(400, statusCode2);
+            var messageId = UUID.randomUUID();
+            var text = messageId.toString();
+            var response2 = application.get("/stream?roomId=" + room, text);
+            var statusCode3 = response2.statusCode();
+            assertEquals(404, statusCode3);
+            var messageId2 = UUID.randomUUID();
+            var timestamp = Instant.now();
+            ChatMessage foreign = storedMessage(messageId2, timestamp, "foreign");
             TestDatabase.save(application, foreign);
-            assertEquals(404, application.get("/stream?roomId=" + room, foreign.id().toString()).statusCode());
+            var messageId3 = foreign.id();
+            var text2 = messageId3.toString();
+            var response3 = application.get("/stream?roomId=" + room, text2);
+            var statusCode4 = response3.statusCode();
+            assertEquals(404, statusCode4);
         }
     }
 
@@ -227,22 +281,40 @@ class StreamReconnectIntegrationTest {
     @Test
     void returns503ForReplayWhileLiveWorksWithoutDatabase() throws Exception {
         UUID room = UUID.randomUUID();
-        try (TestChat application = new TestChat(broker, TestDatabase.arguments(database))) {
-            ChatMessage cursor = storedMessage(room, Instant.now(), "cursor");
+        try (TestChat application = startApplication()) {
+            var timestamp = Instant.now();
+            ChatMessage cursor = storedMessage(room, timestamp, "cursor");
             TestDatabase.save(application, cursor);
             String containerId = database.getContainerId();
-            var docker = DockerClientFactory.instance().client();
-            docker.stopContainerCmd(containerId).withTimeout(1).exec();
+            var instanceResult = DockerClientFactory.instance();
+            var docker = instanceResult.client();
+            var stopContainerCmdResult = docker.stopContainerCmd(containerId);
+            var withTimeoutResult = stopContainerCmdResult.withTimeout(1);
+            withTimeoutResult.exec();
             try {
-                assertEquals(503, application.get("/stream?roomId=" + room, cursor.id().toString()).statusCode());
+                var messageId = cursor.id();
+                var text = messageId.toString();
+                var response = application.get("/stream?roomId=" + room, text);
+                var statusCode2 = response.statusCode();
+                assertEquals(503, statusCode2);
                 try (SseClient live = new SseClient(application, room, null)) {
                     ChatMessage message = application.send(room, "sender", "live without DB");
-                    assertEquals(message, live.take(1, Duration.ofSeconds(5)).getFirst());
+                    var receivedMessages = live.take(1, SECONDS_5);
+                    var receivedMessage = receivedMessages.getFirst();
+                    assertEquals(message, receivedMessage);
                 }
             } finally {
-                docker.startContainerCmd(containerId).exec();
-                await().atMost(Duration.ofSeconds(15)).ignoreExceptions().until(
-                        () -> database.execInContainer("pg_isready", "-U", "chat", "-d", "chat").getExitCode() == 0);
+                var startContainerCmdResult = docker.startContainerCmd(containerId);
+                startContainerCmdResult.exec();
+                var readiness = await();
+                var timeout2 = Duration.ofSeconds(15);
+                var boundedWait = readiness.atMost(timeout2);
+                var ignoreExceptionsResult = boundedWait.ignoreExceptions();
+                ignoreExceptionsResult.until(
+                        () -> {
+                            var result = database.execInContainer("pg_isready", "-U", "chat", "-d", "chat");
+                            return result.getExitCode() == 0;
+                        });
             }
         }
     }
@@ -251,19 +323,24 @@ class StreamReconnectIntegrationTest {
     @Test
     void replaysEqualTimesUsingCanonicalUuidOrder() throws Exception {
         UUID room = UUID.randomUUID();
-        try (TestChat application = new TestChat(broker, TestDatabase.arguments(database))) {
+        try (TestChat application = startApplication()) {
             Instant time = Instant.parse("2026-11-13T10:00:00Z");
-            ChatMessage cursor = new ChatMessage(UUID.fromString("00000000-0000-0000-0000-000000000001"), room,
+            var messageId = UUID.fromString("00000000-0000-0000-0000-000000000001");
+            ChatMessage cursor = new ChatMessage(messageId, room,
                     "sender", "Sender", "cursor", time);
-            ChatMessage first = new ChatMessage(UUID.fromString("80000000-0000-0000-0000-000000000001"), room,
+            var messageId2 = UUID.fromString("80000000-0000-0000-0000-000000000001");
+            ChatMessage first = new ChatMessage(messageId2, room,
                     "sender", "Sender", "first", time);
-            ChatMessage second = new ChatMessage(UUID.fromString("ffffffff-ffff-ffff-ffff-ffffffffffff"), room,
+            var messageId3 = UUID.fromString("ffffffff-ffff-ffff-ffff-ffffffffffff");
+            ChatMessage second = new ChatMessage(messageId3, room,
                     "sender", "Sender", "second", time);
             TestDatabase.save(application, second);
             TestDatabase.save(application, cursor);
             TestDatabase.save(application, first);
-            try (SseClient resumed = new SseClient(application, room, cursor.id().toString())) {
-                assertEquals(List.of(first, second), resumed.take(2, Duration.ofSeconds(5)));
+            try (SseClient resumed = reconnect(application, room, cursor)) {
+                var expectedValues = List.of(first, second);
+                var receivedMessages = resumed.take(2, SECONDS_5);
+                assertEquals(expectedValues, receivedMessages);
             }
         }
     }
@@ -272,29 +349,62 @@ class StreamReconnectIntegrationTest {
     @Test
     void rejectsOverflowDuringHistoryLoad() throws Exception {
         UUID room = UUID.randomUUID();
-        try (TestChat application = new TestChat(broker, settings("--live.client-buffer-size=1"));
+        try (TestChat application = startApplication("--live.client-buffer-size=1");
              var requests = Executors.newVirtualThreadPerTaskExecutor()) {
-            ChatMessage cursor = storedMessage(room, Instant.now(), "cursor");
+            var timestamp = Instant.now();
+            ChatMessage cursor = storedMessage(room, timestamp, "cursor");
             TestDatabase.save(application, cursor);
             DataSource source = application.context.getBean(DataSource.class);
             StreamService streams = application.context.getBean(StreamService.class);
             try (Connection lock = source.getConnection()) {
                 lock.setAutoCommit(false);
                 lockTable(lock);
-                var future = requests.submit(() -> application.get("/stream?roomId=" + room, cursor.id().toString()));
+                UUID cursorId = cursor.id();
+                String lastId = cursorId.toString();
+                String path = "/stream?roomId=" + room;
+                var future = requests.submit(() -> application.get(path, lastId));
                 try {
-                    await().atMost(Duration.ofSeconds(3)).until(() -> streams.connectionCount() == 1);
+                    var readiness = await();
+                    var boundedWait = readiness.atMost(SECONDS_3);
+                    boundedWait.until(() -> streams.connectionCount() == 1);
                     application.send(room, "sender", "first");
                     ChatMessage second = application.send(room, "sender", "overflow");
                     RecentMessageBuffer recent = application.context.getBean(RecentMessageBuffer.class);
-                    await().atMost(Duration.ofSeconds(3)).until(() -> recent.find(second.id()) != null);
+                    var readiness2 = await();
+                    var boundedWait2 = readiness2.atMost(SECONDS_3);
+                    UUID secondId = second.id();
+                    boundedWait2.until(() -> recent.find(secondId) != null);
                 } finally {
                     lock.rollback();
                 }
-                assertEquals(409, future.get(10, TimeUnit.SECONDS).statusCode());
-                assertEquals(0, streams.connectionCount());
+                var response = future.get(10, TimeUnit.SECONDS);
+                var statusCode2 = response.statusCode();
+                assertEquals(409, statusCode2);
+                var connectionCount2 = streams.connectionCount();
+                assertEquals(0, connectionCount2);
             }
         }
+    }
+
+    /** Gemeinsame Datenbankparameter halten die wiederholte HTTP-Testvorbereitung kurz. */
+    private TestChat startApplication(String... extraArguments) {
+        List<String> arguments = new ArrayList<>();
+        String[] databaseArguments = TestDatabase.arguments(database);
+        for (String argument : databaseArguments) {
+            arguments.add(argument);
+        }
+        for (String argument : extraArguments) {
+            arguments.add(argument);
+        }
+        String[] settings = arguments.toArray(String[]::new);
+        return new TestChat(broker, settings);
+    }
+
+    /** Der Helper macht die Umwandlung vom Cursorobjekt in den tatsächlichen HTTP-Header explizit. */
+    private SseClient reconnect(TestChat application, UUID room, ChatMessage cursor) throws Exception {
+        UUID cursorId = cursor.id();
+        String lastId = cursorId.toString();
+        return new SseClient(application, room, lastId);
     }
 
     /** Die Sperre dient nur dem Test und hält echte SELECTs reproduzierbar an. */
@@ -306,7 +416,8 @@ class StreamReconnectIntegrationTest {
 
     /** Erzeugt unabhängige IDs, damit kein Test die Daten eines anderen zurücksetzen muss. */
     private ChatMessage storedMessage(UUID room, Instant time, String content) {
-        return new ChatMessage(UUID.randomUUID(), room, "sender", "Sender", content, time);
+        var messageId = UUID.randomUUID();
+        return new ChatMessage(messageId, room, "sender", "Sender", content, time);
     }
 
     /** Zusätzliche Grenzwerte überschreiben nur den jeweiligen Test-Kontext. */

@@ -20,6 +20,11 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 @Testcontainers
 class StreamIntegrationTest {
 
+    // Gleiche Testfristen werden gemeinsam benannt statt pro Aufruf wiederholt.
+    private static final Duration SECONDS_5 = Duration.ofSeconds(5);
+    private static final Duration MILLISECONDS_200 = Duration.ofMillis(200);
+
+
     @Container
     static RabbitMQContainer broker = new RabbitMQContainer("rabbitmq:3.13-management");
 
@@ -32,10 +37,11 @@ class StreamIntegrationTest {
              SseClient recipient = new SseClient(application, room, null);
              SseClient other = new SseClient(application, otherRoom, null)) {
             ChatMessage expected = application.send(room, "anna", "Hallo 👋\nZweite Zeile");
-            List<ChatMessage> received = recipient.take(1, Duration.ofSeconds(5));
-            assertEquals(expected, received.getFirst());
-            recipient.assertQuiet(Duration.ofMillis(200));
-            other.assertQuiet(Duration.ofMillis(200));
+            List<ChatMessage> received = recipient.take(1, SECONDS_5);
+            var receivedMessage = received.getFirst();
+            assertEquals(expected, receivedMessage);
+            recipient.assertQuiet(MILLISECONDS_200);
+            other.assertQuiet(MILLISECONDS_200);
         }
     }
 
@@ -43,9 +49,15 @@ class StreamIntegrationTest {
     @Test
     void rejectsInvalidRoomParameters() throws Exception {
         try (TestChat application = new TestChat(broker)) {
-            assertEquals(400, application.get("/stream", null).statusCode());
-            assertEquals(400, application.get("/stream?roomId=wrong", null).statusCode());
-            assertEquals(400, application.get("/stream?roomId=1-1-1-1-1", null).statusCode());
+            var response = application.get("/stream", null);
+            var statusCode2 = response.statusCode();
+            assertEquals(400, statusCode2);
+            var response2 = application.get("/stream?roomId=wrong", null);
+            var statusCode3 = response2.statusCode();
+            assertEquals(400, statusCode3);
+            var response3 = application.get("/stream?roomId=1-1-1-1-1", null);
+            var statusCode4 = response3.statusCode();
+            assertEquals(400, statusCode4);
         }
     }
 
@@ -56,11 +68,15 @@ class StreamIntegrationTest {
             StreamService streams = application.context.getBean(StreamService.class);
             UUID room = UUID.randomUUID();
             SseClient recipient = new SseClient(application, room, null);
-            assertEquals(1, streams.connectionCount());
+            var connectionCount2 = streams.connectionCount();
+            assertEquals(1, connectionCount2);
             recipient.close();
-            await().atMost(Duration.ofSeconds(5)).untilAsserted(() -> {
+            var readiness = await();
+            var boundedWait = readiness.atMost(SECONDS_5);
+            boundedWait.untilAsserted(() -> {
                 application.send(room, "cleanup", "After disconnect");
-                assertEquals(0, streams.connectionCount());
+                var connectionCount3 = streams.connectionCount();
+                assertEquals(0, connectionCount3);
             });
         }
     }

@@ -671,7 +671,23 @@ einschliesslich Tests gegen die tatsächlichen Regeln prüfen.
 
 **Test:** CodeStyleTest und anschliessend `mvn clean test`, keine deaktivierten Tests.
 
-**Geprüft und korrigiert:** Noch nicht durchgeführt.
+**Geprüft und korrigiert:** 13.11.2026, KI-Nachprüfung: `mvn clean test`
+um 18:45:57 erfolgreich, 39 Chat-Service- und 101 Writer-Tests, insgesamt 140;
+keine Fehler oder übersprungenen Tests. Der Syntaxcheck erfasst nun auch
+verschachtelte Methoden-/Konstruktorargumente und Empfängerketten in sämtlichen
+Produktions- und Testdateien. Vier negative Parser-Beispiele und ein positives
+Beispiel mit aufgeschobener Lambda-Ausführung prüfen den Prüfer selbst.
+Bei der mechanischen Testbereinigung verbleibende Ressourcen-, Guard- und
+Lambda-Stellen wurden manuell aufgeteilt, ohne Aktionen aus ihren später
+ausgeführten Lambda-Körpern vorzuziehen. Neutrale Hilfsnamen in den HTTP-/DB-
+Testhilfen durch fachliche Namen ersetzt, identische Testfristen zusammengefasst.
+Eine dabei falsch umbenannte connectTimeout-Methode wurde beim Kompilieren
+erkannt und vor dem grünen Gesamtlauf korrigiert. Registrierung und SQL-Übergabe
+in StreamService haben nun eigene kurze Methoden. Der Compose-Stilnachweis
+verlangt einen nichtleeren erfolgreichen Testbericht statt genau eines Tests.
+Sprache, verständliche Begründungen und sinnvolle Methodenlängen bleiben
+zusätzlich eine manuelle Prüfung; Syntaxgrün allein beweist nicht alle Regeln.
+Persönlicher Review des Lernenden wird hier nicht vorweggenommen.
 
 ### Nachprüfung N3 — Neue Abnahme und transparenter Abschluss
 

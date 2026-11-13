@@ -72,8 +72,11 @@ class MessagePublisherIntegrationTest {
 
         ChatMessage persisted = receiveFrom(QueueNames.PERSIST_QUEUE);
         assertNotNull(persisted);
-        assertEquals(message.id(), persisted.id());
-        assertEquals("Hallo Schreibweg", persisted.content());
+        var messageId = message.id();
+        var messageId2 = persisted.id();
+        assertEquals(messageId, messageId2);
+        var contentResult = persisted.content();
+        assertEquals("Hallo Schreibweg", contentResult);
     }
 
     /** Eine zusätzlich gebundene Queue erhält dieselbe Veröffentlichung über den Fanout. */
@@ -84,7 +87,8 @@ class MessagePublisherIntegrationTest {
         rabbitAdmin.declareQueue(gatewayQueue);
 
         FanoutExchange exchange = new FanoutExchange(QueueNames.DELIVERY_EXCHANGE);
-        Binding binding = BindingBuilder.bind(gatewayQueue).to(exchange);
+        var bindResult = BindingBuilder.bind(gatewayQueue);
+        Binding binding = bindResult.to(exchange);
         rabbitAdmin.declareBinding(binding);
 
         ChatMessage message = createMessage("Hallo Zustellweg");
@@ -94,8 +98,11 @@ class MessagePublisherIntegrationTest {
         String queueName = gatewayQueue.getName();
         ChatMessage delivered = receiveFrom(queueName);
         assertNotNull(delivered);
-        assertEquals(message.id(), delivered.id());
-        assertEquals("Hallo Zustellweg", delivered.content());
+        var messageId = message.id();
+        var messageId2 = delivered.id();
+        assertEquals(messageId, messageId2);
+        var contentResult = delivered.content();
+        assertEquals("Hallo Zustellweg", contentResult);
     }
 
     /**
@@ -111,7 +118,8 @@ class MessagePublisherIntegrationTest {
         };
         // Die exklusive Test-Queue gehört der Consumer-Verbindung, nicht dem Publisher.
         RabbitTemplate consumerTemplate = new RabbitTemplate(connectionFactory);
-        consumerTemplate.setMessageConverter(rabbitTemplate.getMessageConverter());
+        var getMessageConverterResult = rabbitTemplate.getMessageConverter();
+        consumerTemplate.setMessageConverter(getMessageConverterResult);
         return consumerTemplate.receiveAndConvert(queueName, 5000, targetType);
     }
 

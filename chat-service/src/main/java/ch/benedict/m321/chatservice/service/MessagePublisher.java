@@ -35,7 +35,8 @@ public class MessagePublisher {
         rabbitTemplate.convertAndSend(QueueNames.PERSIST_QUEUE, message);
         rabbitTemplate.convertAndSend(QueueNames.DELIVERY_EXCHANGE, FANOUT_ROUTING_KEY, message);
 
+        var messageId = message.id();
         log.info("Message {} published to queue {} and exchange {}",
-                message.id(), QueueNames.PERSIST_QUEUE, QueueNames.DELIVERY_EXCHANGE);
+                messageId, QueueNames.PERSIST_QUEUE, QueueNames.DELIVERY_EXCHANGE);
     }
 }

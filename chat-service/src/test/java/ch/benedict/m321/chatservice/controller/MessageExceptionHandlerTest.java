@@ -21,7 +21,10 @@ class MessageExceptionHandlerTest {
 
         ResponseEntity<String> response = handler.handleBrokerNotAvailable(exception);
 
-        assertEquals(503, response.getStatusCode().value());
-        assertNotNull(response.getBody());
+        var getStatusCodeResult = response.getStatusCode();
+        var valueResult = getStatusCodeResult.value();
+        assertEquals(503, valueResult);
+        var getBodyResult = response.getBody();
+        assertNotNull(getBodyResult);
     }
 }

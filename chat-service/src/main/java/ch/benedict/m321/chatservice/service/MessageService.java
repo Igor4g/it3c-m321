@@ -33,18 +33,22 @@ public class MessageService {
      * Nachricht liegt zu diesem Zeitpunkt erst in der Queue.
      */
     public synchronized AcceptedResponse accept(SendMessageRequest request) {
-        int contentLength = request.content().length();
-        log.info("Message received for room {} with {} characters", request.roomId(), contentLength);
+        String content = request.content();
+        int contentLength = content.length();
+        UUID roomId = request.roomId();
+        String senderId = request.senderId();
+        String senderName = request.senderName();
+        log.info("Message received for room {} with {} characters", roomId, contentLength);
 
         UUID messageId = UUID.randomUUID();
         Instant sentAt = messageTimestamp.next();
 
         ChatMessage message = new ChatMessage(
                 messageId,
-                request.roomId(),
-                request.senderId(),
-                request.senderName(),
-                request.content(),
+                roomId,
+                senderId,
+                senderName,
+                content,
                 sentAt);
 
         messagePublisher.publish(message);

@@ -21,22 +21,32 @@ import static org.junit.jupiter.api.Assertions.*;
 /** Prüft Reihenfolge und Rückstau isoliert, ohne langsame Netzwerkbedingungen erraten zu müssen. */
 class StreamSessionTest {
 
+    // Gleiche Testfristen werden gemeinsam benannt statt pro Aufruf wiederholt.
+    private static final Duration MILLISECONDS_500 = Duration.ofMillis(500);
+
+
     /** Ein Worker sendet vorgefüllte Ereignisse in derselben Reihenfolge. */
     @Test
     void keepsFifoOrder() throws Exception {
         RecordingEmitter emitter = new RecordingEmitter();
         AtomicInteger closed = new AtomicInteger();
-        StreamSession session = new StreamSession(UUID.randomUUID(), 2, emitter, ignored -> closed.incrementAndGet());
+        var messageId = UUID.randomUUID();
+        StreamSession session = new StreamSession(messageId, 2, emitter, ignored -> closed.incrementAndGet());
         ChatMessage first = message("first");
         ChatMessage second = message("second");
-        assertTrue(session.offer(first));
-        assertTrue(session.offer(second));
+        var accepted = session.offer(first);
+        assertTrue(accepted);
+        var accepted2 = session.offer(second);
+        assertTrue(accepted2);
         session.start();
-        assertEquals(first, emitter.messages.poll(5, TimeUnit.SECONDS));
-        assertEquals(second, emitter.messages.poll(5, TimeUnit.SECONDS));
+        var receivedMessage = emitter.messages.poll(5, TimeUnit.SECONDS);
+        assertEquals(first, receivedMessage);
+        var receivedMessage2 = emitter.messages.poll(5, TimeUnit.SECONDS);
+        assertEquals(second, receivedMessage2);
         session.close();
         session.close();
-        assertEquals(1, closed.get());
+        var response = closed.get();
+        assertEquals(1, response);
     }
 
     /** Cursor-Ausschlüsse müssen auch bei vollem rollenden Duplikatfenster erhalten bleiben. */
@@ -73,22 +83,32 @@ class StreamSessionTest {
     @Test
     void isolatesBlockedWriterAndRejectsOverflow() throws Exception {
         BlockingEmitter slowEmitter = new BlockingEmitter();
-        StreamSession slow = new StreamSession(UUID.randomUUID(), 1, slowEmitter, ignored -> { });
+        var messageId = UUID.randomUUID();
+        StreamSession slow = new StreamSession(messageId, 1, slowEmitter, ignored -> { });
         RecordingEmitter healthyEmitter = new RecordingEmitter();
-        StreamSession healthy = new StreamSession(UUID.randomUUID(), 2, healthyEmitter, ignored -> { });
+        var messageId2 = UUID.randomUUID();
+        StreamSession healthy = new StreamSession(messageId2, 2, healthyEmitter, ignored -> { });
         try {
             slow.start();
-            assertTrue(slowEmitter.entered.await(5, TimeUnit.SECONDS));
+            var readiness = slowEmitter.entered.await(5, TimeUnit.SECONDS);
+            assertTrue(readiness);
             ChatMessage message = message("healthy");
-            assertTrue(slow.offer(message));
+            var accepted = slow.offer(message);
+            assertTrue(accepted);
             // Eine bereits bekannte ID belegt keinen zweiten Platz im Puffer.
-            assertTrue(slow.offer(message));
+            var accepted2 = slow.offer(message);
+            assertTrue(accepted2);
             ChatMessage nextMessage = message("overflow");
-            assertTimeoutPreemptively(Duration.ofMillis(500), () -> assertFalse(slow.offer(nextMessage)));
+            assertTimeoutPreemptively(MILLISECONDS_500, () -> {
+                boolean acceptedOverflow = slow.offer(nextMessage);
+                assertFalse(acceptedOverflow);
+            });
             healthy.start();
-            assertTrue(healthy.offer(message));
-            assertEquals(message, healthyEmitter.messages.poll(5, TimeUnit.SECONDS));
-            assertTimeoutPreemptively(Duration.ofMillis(500), slow::close);
+            var accepted3 = healthy.offer(message);
+            assertTrue(accepted3);
+            var receivedMessage = healthyEmitter.messages.poll(5, TimeUnit.SECONDS);
+            assertEquals(message, receivedMessage);
+            assertTimeoutPreemptively(MILLISECONDS_500, slow::close);
         } finally {
             slowEmitter.release.countDown();
             slow.close();
@@ -98,7 +118,10 @@ class StreamSessionTest {
 
     /** Einfache unveränderliche Nutzdaten halten die Tests unabhängig vom HTTP-Publisher. */
     private ChatMessage message(String content) {
-        return new ChatMessage(UUID.randomUUID(), UUID.randomUUID(), "sender", "Sender", content, Instant.now());
+        var messageId = UUID.randomUUID();
+        var messageId2 = UUID.randomUUID();
+        var timestamp = Instant.now();
+        return new ChatMessage(messageId, messageId2, "sender", "Sender", content, timestamp);
     }
 
     /** Zeichnet nur Chat-Daten auf; Kommentare gehören nicht zur Nachrichtenmenge. */
@@ -128,7 +151,8 @@ class StreamSessionTest {
             try {
                 release.await(5, TimeUnit.SECONDS);
             } catch (InterruptedException exception) {
-                Thread.currentThread().interrupt();
+                var currentThreadResult = Thread.currentThread();
+                currentThreadResult.interrupt();
                 throw new IOException("Writer interrupted", exception);
             }
         }

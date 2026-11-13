@@ -54,12 +54,24 @@ class MessageControllerIntegrationTest {
                 }
                 """;
 
-        mockMvc.perform(post("/messages")
-                        .contentType(MediaType.APPLICATION_JSON)
-                        .content(requestBody))
-                .andExpect(status().isAccepted())
-                .andExpect(jsonPath("$.id").exists())
-                .andExpect(jsonPath("$.sentAt").exists());
+        var postResult = post("/messages");
+        var contentTypeResult = postResult
+                        .contentType(MediaType.APPLICATION_JSON);
+        var contentResult = contentTypeResult
+                        .content(requestBody);
+        var performResult = mockMvc.perform(contentResult);
+        var statusResult = status();
+        var isAcceptedResult = statusResult.isAccepted();
+        var andExpectResult = performResult
+                .andExpect(isAcceptedResult);
+        var jsonPathResult = jsonPath("$.id");
+        var existsResult = jsonPathResult.exists();
+        var andExpectResult2 = andExpectResult
+                .andExpect(existsResult);
+        var jsonPathResult2 = jsonPath("$.sentAt");
+        var existsResult2 = jsonPathResult2.exists();
+        andExpectResult2
+                .andExpect(existsResult2);
 
         ParameterizedTypeReference<ChatMessage> targetType = new ParameterizedTypeReference<>() {
         };
@@ -67,8 +79,10 @@ class MessageControllerIntegrationTest {
                 QueueNames.PERSIST_QUEUE, 5000, targetType);
 
         assertNotNull(message);
-        assertEquals("Hallo zusammen", message.content());
-        assertEquals("Anna Muster", message.senderName());
+        var contentResult2 = message.content();
+        assertEquals("Hallo zusammen", contentResult2);
+        var senderNameResult = message.senderName();
+        assertEquals("Anna Muster", senderNameResult);
     }
 
     /** Ein leerer Inhalt wird abgelehnt, bevor er im verteilten System weiterverarbeitet wird. */
@@ -83,9 +97,15 @@ class MessageControllerIntegrationTest {
                 }
                 """;
 
-        mockMvc.perform(post("/messages")
-                        .contentType(MediaType.APPLICATION_JSON)
-                        .content(requestBody))
-                .andExpect(status().isBadRequest());
+        var postResult = post("/messages");
+        var contentTypeResult = postResult
+                        .contentType(MediaType.APPLICATION_JSON);
+        var contentResult = contentTypeResult
+                        .content(requestBody);
+        var performResult = mockMvc.perform(contentResult);
+        var statusResult = status();
+        var isBadRequestResult = statusResult.isBadRequest();
+        performResult
+                .andExpect(isBadRequestResult);
     }
 }

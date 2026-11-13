@@ -17,17 +17,23 @@ class MessageTimestampTest {
         Clock clock = mock(Clock.class);
         Instant now = Instant.parse("2026-11-13T10:00:00.123456789Z");
         Instant earlier = now.minusSeconds(10);
-        when(clock.instant()).thenReturn(now, now, earlier);
+        var instantResult = clock.instant();
+        var whenResult = when(instantResult);
+        whenResult.thenReturn(now, now, earlier);
         MessageTimestamp timestamp = new MessageTimestamp(clock);
 
         Instant first = timestamp.next();
         Instant second = timestamp.next();
         Instant third = timestamp.next();
 
-        assertEquals(Instant.parse("2026-11-13T10:00:00.123456Z"), first);
-        assertTrue(second.isAfter(first));
-        assertTrue(third.isAfter(second));
-        assertEquals(0, third.getNano() % 1000);
+        var timestamp2 = Instant.parse("2026-11-13T10:00:00.123456Z");
+        assertEquals(timestamp2, first);
+        var isAfterResult = second.isAfter(first);
+        assertTrue(isAfterResult);
+        var isAfterResult2 = third.isAfter(second);
+        assertTrue(isAfterResult2);
+        var getNanoResult = third.getNano();
+        assertEquals(0, getNanoResult % 1000);
     }
 
     /** Eine normal weiterlaufende Uhr behält ihren echten späteren Zeitpunkt. */
@@ -36,9 +42,13 @@ class MessageTimestampTest {
         Clock clock = mock(Clock.class);
         Instant firstTime = Instant.parse("2026-11-13T10:00:00Z");
         Instant later = firstTime.plusSeconds(1);
-        when(clock.instant()).thenReturn(firstTime, later);
+        var instantResult = clock.instant();
+        var whenResult = when(instantResult);
+        whenResult.thenReturn(firstTime, later);
         MessageTimestamp timestamp = new MessageTimestamp(clock);
-        assertEquals(firstTime, timestamp.next());
-        assertEquals(later, timestamp.next());
+        var nextResult = timestamp.next();
+        assertEquals(firstTime, nextResult);
+        var nextResult2 = timestamp.next();
+        assertEquals(later, nextResult2);
     }
 }

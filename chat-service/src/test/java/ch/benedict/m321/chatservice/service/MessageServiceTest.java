@@ -53,8 +53,10 @@ class MessageServiceTest {
 
         AcceptedResponse response = messageService.accept(request);
 
-        assertNotNull(response.id());
-        assertNotNull(response.sentAt());
+        var messageId = response.id();
+        assertNotNull(messageId);
+        var sentAtResult = response.sentAt();
+        assertNotNull(sentAtResult);
     }
 
     /** Die HTTP-Antwort muss auf genau die eine erzeugte Nachricht verweisen. */
@@ -70,10 +72,15 @@ class MessageServiceTest {
         AcceptedResponse response = messageService.accept(request);
 
         assertEquals(1, publisher.publishCount);
-        assertEquals(response.id(), publisher.published.id());
-        assertEquals(roomId, publisher.published.roomId());
-        assertEquals("Anna Muster", publisher.published.senderName());
-        assertEquals("Hallo", publisher.published.content());
+        var messageId = response.id();
+        var messageId2 = publisher.published.id();
+        assertEquals(messageId, messageId2);
+        var roomIdResult = publisher.published.roomId();
+        assertEquals(roomId, roomIdResult);
+        var senderNameResult = publisher.published.senderName();
+        assertEquals("Anna Muster", senderNameResult);
+        var contentResult = publisher.published.content();
+        assertEquals("Hallo", contentResult);
     }
 
     /** Zwei Annahmen sind unterschiedliche Ereignisse, auch bei gleichem Inhalt. */
@@ -82,13 +89,16 @@ class MessageServiceTest {
         RecordingPublisher publisher = new RecordingPublisher();
         MessageTimestamp timestamp = new MessageTimestamp();
         MessageService messageService = new MessageService(publisher, timestamp);
+        var messageId = UUID.randomUUID();
         SendMessageRequest request =
-                new SendMessageRequest(UUID.randomUUID(), "anna", "Anna Muster", "Hallo");
+                new SendMessageRequest(messageId, "anna", "Anna Muster", "Hallo");
 
         AcceptedResponse first = messageService.accept(request);
         AcceptedResponse second = messageService.accept(request);
 
         assertEquals(2, publisher.publishCount);
-        assertNotEquals(first.id(), second.id());
+        var messageId2 = first.id();
+        var messageId3 = second.id();
+        assertNotEquals(messageId2, messageId3);
     }
 }

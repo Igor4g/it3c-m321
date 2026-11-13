@@ -21,30 +21,47 @@ class RecentMessageBufferTest {
         ChatMessage first = message("first");
         ChatMessage second = message("second");
         ChatMessage third = message("third");
-        assertTrue(buffer.add(first));
-        assertTrue(buffer.add(second));
-        assertFalse(buffer.add(second));
+        var addResult = buffer.add(first);
+        assertTrue(addResult);
+        var addResult2 = buffer.add(second);
+        assertTrue(addResult2);
+        var addResult3 = buffer.add(second);
+        assertFalse(addResult3);
         buffer.add(third);
-        assertNull(buffer.find(first.id()));
-        assertEquals(List.of(second, third), buffer.snapshot());
+        var messageId = first.id();
+        var foundMessage = buffer.find(messageId);
+        assertNull(foundMessage);
+        var expectedValues = List.of(second, third);
+        var snapshotResult = buffer.snapshot();
+        assertEquals(expectedValues, snapshotResult);
         List<ChatMessage> copy = buffer.snapshot();
         copy.clear();
-        assertEquals(2, buffer.snapshot().size());
+        var snapshotResult2 = buffer.snapshot();
+        var count = snapshotResult2.size();
+        assertEquals(2, count);
     }
 
     /** Ein fremder Zeitstempel darf die beobachtete Broker-Reihenfolge im Puffer nicht verändern. */
     @Test
     void keepsArrivalOrderInsteadOfSortingByTime() {
-        RecentMessageBuffer buffer = new RecentMessageBuffer(new LiveProperties(2, 2, 2));
+        var liveProperties = new LiveProperties(2, 2, 2);
+        RecentMessageBuffer buffer = new RecentMessageBuffer(liveProperties);
         ChatMessage later = message("later");
-        ChatMessage earlier = new ChatMessage(UUID.randomUUID(), later.roomId(), "other", "Other", "earlier", Instant.EPOCH);
+        var messageId = UUID.randomUUID();
+        var roomIdResult = later.roomId();
+        ChatMessage earlier = new ChatMessage(messageId, roomIdResult, "other", "Other", "earlier", Instant.EPOCH);
         buffer.add(later);
         buffer.add(earlier);
-        assertEquals(List.of(later, earlier), buffer.snapshot());
+        var expectedValues = List.of(later, earlier);
+        var snapshotResult = buffer.snapshot();
+        assertEquals(expectedValues, snapshotResult);
     }
 
     /** Unterschiedliche IDs stellen unterschiedliche Ereignisse dar. */
     private ChatMessage message(String content) {
-        return new ChatMessage(UUID.randomUUID(), UUID.randomUUID(), "sender", "Sender", content, Instant.now());
+        var messageId = UUID.randomUUID();
+        var messageId2 = UUID.randomUUID();
+        var timestamp = Instant.now();
+        return new ChatMessage(messageId, messageId2, "sender", "Sender", content, timestamp);
     }
 }

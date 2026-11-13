@@ -50,7 +50,9 @@ public class StreamSession {
         if (closed.get()) {
             throw new ResponseStatusException(HttpStatus.CONFLICT, "Connection closed during replay");
         }
-        worker = Thread.ofVirtual().name("chat-stream").start(this::writeMessages);
+        Thread.Builder.OfVirtual builder = Thread.ofVirtual();
+        builder = builder.name("chat-stream");
+        worker = builder.start(this::writeMessages);
     }
 
     /** Wartet nie auf Netzwerk-I/O; ein voller Puffer wird dem Aufrufer gemeldet. */
@@ -110,7 +112,8 @@ public class StreamSession {
         pending.clear();
         onClosed.accept(this);
         Thread activeWorker = worker;
-        if (activeWorker != null && activeWorker != Thread.currentThread()) {
+        Thread currentThread = Thread.currentThread();
+        if (activeWorker != null && activeWorker != currentThread) {
             activeWorker.interrupt();
         }
     }
@@ -118,22 +121,27 @@ public class StreamSession {
     /** Nur dieser Worker schreibt; Kommentare halten die Verbindung ohne zusätzliche Chat-Events offen. */
     private void writeMessages() {
         try {
-            SseEmitter.SseEventBuilder ready = SseEmitter.event().comment("connected");
+            SseEmitter.SseEventBuilder ready = SseEmitter.event();
+            ready = ready.comment("connected");
             emitter.send(ready);
             while (!closed.get()) {
                 ChatMessage message = pending.poll(15, TimeUnit.SECONDS);
                 if (message == null) {
-                    SseEmitter.SseEventBuilder heartbeat = SseEmitter.event().comment("heartbeat");
+                    SseEmitter.SseEventBuilder heartbeat = SseEmitter.event();
+                    heartbeat = heartbeat.comment("heartbeat");
                     emitter.send(heartbeat);
                 } else {
-                    String messageId = message.id().toString();
-                    SseEmitter.SseEventBuilder event = SseEmitter.event()
-                            .id(messageId).data(message, MediaType.APPLICATION_JSON);
+                    UUID id = message.id();
+                    String messageId = id.toString();
+                    SseEmitter.SseEventBuilder event = SseEmitter.event();
+                    event = event.id(messageId);
+                    event = event.data(message, MediaType.APPLICATION_JSON);
                     emitter.send(event);
                 }
             }
         } catch (InterruptedException exception) {
-            Thread.currentThread().interrupt();
+            Thread currentThread = Thread.currentThread();
+            currentThread.interrupt();
         } catch (IOException | IllegalStateException exception) {
             // Ein getrenntes Gegenüber beendet nur seine eigene Sitzung.
         } finally {

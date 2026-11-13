@@ -260,7 +260,7 @@ function Test-SourceRules {
     $report = Join-Path $projectRoot 'chat-service/target/surefire-reports/TEST-ch.benedict.m321.chatservice.CodeStyleTest.xml'
     Assert-True (Test-Path -LiteralPath $report) 'Run mvn clean test before S8'
     [xml]$test = Get-Content -Raw -LiteralPath $report
-    Assert-True ($test.testsuite.tests -eq '1' -and $test.testsuite.failures -eq '0' -and $test.testsuite.errors -eq '0' -and $test.testsuite.skipped -eq '0') 'CodeStyleTest was not successful'
+    Assert-True ([int]$test.testsuite.tests -gt 0 -and $test.testsuite.failures -eq '0' -and $test.testsuite.errors -eq '0' -and $test.testsuite.skipped -eq '0') 'CodeStyleTest was not successful'
     return [pscustomobject]@{ CodeStyleTest = 'passed'; TrackedSecrets = 0 }
 }
 

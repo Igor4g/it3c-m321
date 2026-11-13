@@ -32,6 +32,7 @@ public class MessageController {
     @PostMapping("/messages")
     public ResponseEntity<AcceptedResponse> send(@Valid @RequestBody SendMessageRequest request) {
         AcceptedResponse response = messageService.accept(request);
-        return ResponseEntity.accepted().body(response);
+        ResponseEntity.BodyBuilder responseBuilder = ResponseEntity.accepted();
+        return responseBuilder.body(response);
     }
 }

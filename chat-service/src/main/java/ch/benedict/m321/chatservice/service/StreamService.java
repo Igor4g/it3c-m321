@@ -43,7 +43,23 @@ public class StreamService {
         SseEmitter emitter = new SseEmitter(0L);
         int clientCapacity = properties.clientBufferSize();
         StreamSession session = new StreamSession(roomId, clientCapacity, emitter, this::remove);
-        List<ChatMessage> snapshot = List.of();
+        boolean needsHistory = cursorId != null;
+        List<ChatMessage> snapshot = register(session, needsHistory);
+        try {
+            if (needsHistory) {
+                prepareReplay(session, roomId, cursorId, snapshot);
+            }
+            session.start();
+            return emitter;
+        } catch (RuntimeException exception) {
+            session.close();
+            throw exception;
+        }
+    }
+
+    /** Registrierung und RAM-Sicht bilden dieselbe Grenze gegenüber neu empfangenen Ereignissen. */
+    private List<ChatMessage> register(StreamSession session, boolean needsHistory) {
+        UUID roomId = session.roomId();
         synchronized (monitor) {
             Set<StreamSession> roomClients = clients.get(roomId);
             if (roomClients == null) {
@@ -51,25 +67,21 @@ public class StreamService {
                 clients.put(roomId, roomClients);
             }
             roomClients.add(session);
-            if (cursorId != null) {
-                snapshot = recentMessages.snapshot();
+            if (needsHistory) {
+                return recentMessages.snapshot();
             }
+            return List.of();
         }
-        try {
-            if (cursorId != null) {
-                ReplayService.Prepared prepared = replayService.load(roomId, cursorId, snapshot);
-                synchronized (monitor) {
-                    List<ChatMessage> arrived = session.pendingSnapshot();
-                    List<ChatMessage> ordered = replayService.merge(prepared, arrived);
-                    Set<UUID> excludedIds = prepared.excluded();
-                    session.prepareReplay(ordered, excludedIds);
-                }
-            }
-            session.start();
-            return emitter;
-        } catch (RuntimeException exception) {
-            session.close();
-            throw exception;
+    }
+
+    /** SQL wartet ausserhalb der Sperre; erst die fertige Folge wird unter ihr gemeinsam übergeben. */
+    private void prepareReplay(StreamSession session, UUID roomId, UUID cursorId, List<ChatMessage> snapshot) {
+        ReplayService.Prepared prepared = replayService.load(roomId, cursorId, snapshot);
+        synchronized (monitor) {
+            List<ChatMessage> arrived = session.pendingSnapshot();
+            List<ChatMessage> ordered = replayService.merge(prepared, arrived);
+            Set<UUID> excludedIds = prepared.excluded();
+            session.prepareReplay(ordered, excludedIds);
         }
     }
 
@@ -80,7 +92,8 @@ public class StreamService {
             if (!recentMessages.add(message)) {
                 return;
             }
-            Set<StreamSession> roomClients = clients.get(message.roomId());
+            UUID roomId = message.roomId();
+            Set<StreamSession> roomClients = clients.get(roomId);
             if (roomClients == null) {
                 return;
             }
@@ -110,11 +123,12 @@ public class StreamService {
     /** Eine leere Raumgruppe wird entfernt, damit auch wechselnde Räume keinen Speicher behalten. */
     private void remove(StreamSession session) {
         synchronized (monitor) {
-            Set<StreamSession> roomClients = clients.get(session.roomId());
+            UUID roomId = session.roomId();
+            Set<StreamSession> roomClients = clients.get(roomId);
             if (roomClients != null) {
                 roomClients.remove(session);
                 if (roomClients.isEmpty()) {
-                    clients.remove(session.roomId());
+                    clients.remove(roomId);
                 }
             }
         }
@@ -132,7 +146,8 @@ public class StreamService {
             try {
                 Thread.sleep(20);
             } catch (InterruptedException exception) {
-                Thread.currentThread().interrupt();
+                Thread currentThread = Thread.currentThread();
+                currentThread.interrupt();
                 throw new ResponseStatusException(HttpStatus.SERVICE_UNAVAILABLE, "Live consumer interrupted");
             }
         }

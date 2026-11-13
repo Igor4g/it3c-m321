@@ -6,6 +6,7 @@ import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Component;
 
 import java.util.ArrayList;
+import java.util.Collection;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.UUID;
@@ -20,10 +21,11 @@ public class RecentMessageBuffer {
 
     /** Bekannte IDs werden nicht nochmals verteilt; bei Überlauf fällt die älteste lokale Kopie weg. */
     public synchronized boolean add(ChatMessage message) {
-        if (messages.containsKey(message.id())) {
+        UUID messageId = message.id();
+        if (messages.containsKey(messageId)) {
             return false;
         }
-        messages.put(message.id(), message);
+        messages.put(messageId, message);
         if (messages.size() > properties.historySize()) {
             messages.pollFirstEntry();
         }
@@ -32,7 +34,8 @@ public class RecentMessageBuffer {
 
     /** Eine Kopie lässt sich nach Freigabe der Sperre bearbeiten, ohne die Historie zu verändern. */
     public synchronized List<ChatMessage> snapshot() {
-        return new ArrayList<>(messages.values());
+        Collection<ChatMessage> recent = messages.values();
+        return new ArrayList<>(recent);
     }
 
     /** Ein noch nicht gespeicherter Cursor kann innerhalb des begrenzten aktuellen Fensters liegen. */

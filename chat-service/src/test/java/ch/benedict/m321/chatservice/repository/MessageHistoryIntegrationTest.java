@@ -39,10 +39,18 @@ class MessageHistoryIntegrationTest {
             TestDatabase.save(application, first);
             TestDatabase.save(application, second);
             MessageHistoryRepository history = application.context.getBean(MessageHistoryRepository.class);
-            assertEquals(first, history.find(first.id()));
-            assertNull(history.find(UUID.randomUUID()));
-            assertEquals(List.of(second, third), history.after(room, first, 10));
-            assertEquals(List.of(second), history.after(room, first, 1));
+            var messageId = first.id();
+            var foundMessage = history.find(messageId);
+            assertEquals(first, foundMessage);
+            var messageId2 = UUID.randomUUID();
+            var foundMessage2 = history.find(messageId2);
+            assertNull(foundMessage2);
+            var expectedValues = List.of(second, third);
+            var historyMessages = history.after(room, first, 10);
+            assertEquals(expectedValues, historyMessages);
+            var expectedValues2 = List.of(second);
+            var historyMessages2 = history.after(room, first, 1);
+            assertEquals(expectedValues2, historyMessages2);
             List<UUID> predecessors = history.beforeIds(room, third, 10);
             UUID firstId = first.id();
             UUID secondId = second.id();
@@ -53,8 +61,12 @@ class MessageHistoryIntegrationTest {
             assertEquals(expectedLimited, limitedPredecessors);
             UUID otherRoom = UUID.randomUUID();
             List<UUID> foreignPredecessors = history.beforeIds(otherRoom, third, 10);
-            assertTrue(foreignPredecessors.isEmpty());
-            assertTrue(history.after(UUID.randomUUID(), first, 10).isEmpty());
+            var empty = foreignPredecessors.isEmpty();
+            assertTrue(empty);
+            var messageId3 = UUID.randomUUID();
+            var historyMessages3 = history.after(messageId3, first, 10);
+            var empty2 = historyMessages3.isEmpty();
+            assertTrue(empty2);
         }
     }
 

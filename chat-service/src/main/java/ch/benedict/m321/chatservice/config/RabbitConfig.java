@@ -39,16 +39,17 @@ public class RabbitConfig {
      */
     @Bean
     public Queue persistQueue() {
-        return QueueBuilder.durable(QueueNames.PERSIST_QUEUE)
-                .deadLetterExchange("")
-                .deadLetterRoutingKey(QueueNames.DEAD_LETTER_QUEUE)
-                .build();
+        QueueBuilder builder = QueueBuilder.durable(QueueNames.PERSIST_QUEUE);
+        builder = builder.deadLetterExchange("");
+        builder = builder.deadLetterRoutingKey(QueueNames.DEAD_LETTER_QUEUE);
+        return builder.build();
     }
 
     /** Das Abstellgleis für Nachrichten, die niemand verarbeiten konnte. */
     @Bean
     public Queue deadLetterQueue() {
-        return QueueBuilder.durable(QueueNames.DEAD_LETTER_QUEUE).build();
+        QueueBuilder builder = QueueBuilder.durable(QueueNames.DEAD_LETTER_QUEUE);
+        return builder.build();
     }
 
     /**
@@ -74,7 +75,8 @@ public class RabbitConfig {
     /** Bindet nur die kurzlebige Instanz-Queue an den vorhandenen Zustellweg. */
     @Bean
     public Binding liveBinding(Queue liveQueue, FanoutExchange deliveryExchange) {
-        return BindingBuilder.bind(liveQueue).to(deliveryExchange);
+        BindingBuilder.DestinationConfigurer binding = BindingBuilder.bind(liveQueue);
+        return binding.to(deliveryExchange);
     }
 
     /** Ein Consumer und ein unbestätigtes Ereignis erhalten Reihenfolge und Gesamtgrenze. */

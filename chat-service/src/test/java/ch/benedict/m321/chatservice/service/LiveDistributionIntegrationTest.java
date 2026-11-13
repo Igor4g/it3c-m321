@@ -25,6 +25,11 @@ import static org.junit.jupiter.api.Assertions.*;
 @Testcontainers
 class LiveDistributionIntegrationTest {
 
+    // Gleiche Testfristen werden gemeinsam benannt statt pro Aufruf wiederholt.
+    private static final Duration SECONDS_10 = Duration.ofSeconds(10);
+    private static final Duration MILLISECONDS_200 = Duration.ofMillis(200);
+
+
     @Container
     static RabbitMQContainer broker = new RabbitMQContainer("rabbitmq:3.13-management");
 
@@ -41,14 +46,18 @@ class LiveDistributionIntegrationTest {
              var senders = Executors.newFixedThreadPool(2)) {
             var firstResult = senders.submit(() -> sendSeries(first, room, "sender-a"));
             var secondResult = senders.submit(() -> sendSeries(second, room, "sender-b"));
-            List<ChatMessage> expected = new ArrayList<>(firstResult.get(30, TimeUnit.SECONDS));
-            expected.addAll(secondResult.get(30, TimeUnit.SECONDS));
+            var response = firstResult.get(30, TimeUnit.SECONDS);
+            List<ChatMessage> expected = new ArrayList<>(response);
+            var response2 = secondResult.get(30, TimeUnit.SECONDS);
+            expected.addAll(response2);
 
-            assertComplete(firstClient.take(400, Duration.ofSeconds(10)), expected);
-            assertComplete(secondClient.take(400, Duration.ofSeconds(10)), expected);
-            firstClient.assertQuiet(Duration.ofMillis(200));
-            secondClient.assertQuiet(Duration.ofMillis(200));
-            other.assertQuiet(Duration.ofMillis(200));
+            var receivedMessages = firstClient.take(400, SECONDS_10);
+            assertComplete(receivedMessages, expected);
+            var receivedMessages2 = secondClient.take(400, SECONDS_10);
+            assertComplete(receivedMessages2, expected);
+            firstClient.assertQuiet(MILLISECONDS_200);
+            secondClient.assertQuiet(MILLISECONDS_200);
+            other.assertQuiet(MILLISECONDS_200);
         }
     }
 
@@ -66,15 +75,22 @@ class LiveDistributionIntegrationTest {
     private void assertComplete(List<ChatMessage> received, List<ChatMessage> expected) {
         Map<UUID, ChatMessage> byId = new HashMap<>();
         for (ChatMessage message : expected) {
-            byId.put(message.id(), message);
+            var messageId = message.id();
+            byId.put(messageId, message);
         }
-        assertEquals(400, byId.size());
+        var count = byId.size();
+        assertEquals(400, count);
         Set<UUID> seen = new HashSet<>();
         for (ChatMessage message : received) {
-            assertTrue(seen.add(message.id()), "Duplicate delivery");
-            assertEquals(byId.get(message.id()), message);
+            var messageId2 = message.id();
+            var addResult = seen.add(messageId2);
+            assertTrue(addResult, "Duplicate delivery");
+            var messageId3 = message.id();
+            var response = byId.get(messageId3);
+            assertEquals(response, message);
         }
-        assertEquals(byId.keySet(), seen);
+        var keySetResult = byId.keySet();
+        assertEquals(keySetResult, seen);
         for (String sender : List.of("sender-a", "sender-b")) {
             List<UUID> expectedOrder = senderIds(expected, sender);
             List<UUID> actualOrder = senderIds(received, sender);
@@ -86,8 +102,10 @@ class LiveDistributionIntegrationTest {
     private List<UUID> senderIds(List<ChatMessage> messages, String sender) {
         List<UUID> result = new ArrayList<>();
         for (ChatMessage message : messages) {
-            if (sender.equals(message.senderId())) {
-                result.add(message.id());
+            String senderId = message.senderId();
+            if (sender.equals(senderId)) {
+                var messageId = message.id();
+                result.add(messageId);
             }
         }
         return result;

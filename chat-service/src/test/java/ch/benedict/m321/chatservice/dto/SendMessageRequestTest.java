@@ -32,23 +32,27 @@ class SendMessageRequestTest {
     /** Eine vollständige Anfrage darf nicht schon an der Eingangsprüfung scheitern. */
     @Test
     void acceptsCompleteRequest() {
+        var messageId = UUID.randomUUID();
         SendMessageRequest request = new SendMessageRequest(
-                UUID.randomUUID(), "anna", "Anna Muster", "Hallo zusammen");
+                messageId, "anna", "Anna Muster", "Hallo zusammen");
 
         Set<ConstraintViolation<SendMessageRequest>> violations = validator.validate(request);
 
-        assertTrue(violations.isEmpty());
+        var empty = violations.isEmpty();
+        assertTrue(empty);
     }
 
     /** Reine Leerzeichen sind keine anzuzeigende Chat-Nachricht. */
     @Test
     void rejectsBlankContent() {
+        var messageId = UUID.randomUUID();
         SendMessageRequest request = new SendMessageRequest(
-                UUID.randomUUID(), "anna", "Anna Muster", "   ");
+                messageId, "anna", "Anna Muster", "   ");
 
         Set<ConstraintViolation<SendMessageRequest>> violations = validator.validate(request);
 
-        assertEquals(1, violations.size());
+        var count = violations.size();
+        assertEquals(1, count);
     }
 
     /** Ohne Raum könnte der Zustellweg keine eindeutige Empfängergruppe wählen. */
@@ -59,6 +63,7 @@ class SendMessageRequestTest {
 
         Set<ConstraintViolation<SendMessageRequest>> violations = validator.validate(request);
 
-        assertEquals(1, violations.size());
+        var count = violations.size();
+        assertEquals(1, count);
     }
 }
