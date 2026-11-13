@@ -7,8 +7,13 @@ import lombok.RequiredArgsConstructor;
 import org.springframework.dao.DataAccessException;
 import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.PlatformTransactionManager;
+import org.springframework.transaction.TransactionDefinition;
+import org.springframework.transaction.TransactionException;
+import org.springframework.transaction.support.TransactionTemplate;
 import org.springframework.web.server.ResponseStatusException;
 
+import java.time.Instant;
 import java.util.ArrayList;
 import java.util.HashSet;
 import java.util.LinkedHashMap;
@@ -24,64 +29,94 @@ public class ReplayService {
 
     private final MessageHistoryRepository history;
     private final LiveProperties properties;
+    private final PlatformTransactionManager transactionManager;
 
-    /** Diese unveränderliche Vorbereitung wird erst mit den inzwischen eingetroffenen Ereignissen verbunden. */
-    public record Prepared(UUID roomId, ChatMessage cursor, List<ChatMessage> recent, List<ChatMessage> stored) {
+    /** Der Lesestand enthält auch bekannte alte IDs für die spätere Live-Übergabe. */
+    public record Prepared(UUID roomId, ChatMessage cursor, List<ChatMessage> recent,
+                           List<ChatMessage> stored, Set<UUID> excluded) {
     }
 
-    /** Auch ein RAM-Cursor benötigt gemäss Vertrag eine erfolgreiche DB-Abfrage. */
+    /** Auch Fehler beim Transaktionsbeginn müssen als 503 statt als interner Fehler enden. */
     public Prepared load(UUID roomId, UUID cursorId, List<ChatMessage> recent) {
+        TransactionTemplate transaction = new TransactionTemplate(transactionManager);
+        transaction.setReadOnly(true);
+        transaction.setIsolationLevel(TransactionDefinition.ISOLATION_REPEATABLE_READ);
         try {
-            ChatMessage cursor = history.find(cursorId);
-            if (cursor == null) {
-                cursor = find(recent, cursorId);
-            }
-            if (cursor == null || !roomId.equals(cursor.roomId())) {
-                throw new ResponseStatusException(HttpStatus.NOT_FOUND, "Unknown cursor in this room");
-            }
-            int maximumRows = Math.addExact(properties.replayLimit(), 1);
-            List<ChatMessage> stored = history.after(roomId, cursor, maximumRows);
-            if (stored.size() > properties.replayLimit()) {
-                throw limitExceeded();
-            }
-            return new Prepared(roomId, cursor, recent, stored);
-        } catch (DataAccessException exception) {
+            return transaction.execute(status -> readHistory(roomId, cursorId, recent));
+        } catch (DataAccessException | TransactionException exception) {
             throw new ResponseStatusException(HttpStatus.SERVICE_UNAVAILABLE, "History temporarily unavailable");
         }
     }
 
-    /** IDs verbinden SQL, RAM und Übergabe; der Cursor und bekannte Vorgänger werden ausgeschlossen. */
-    public List<ChatMessage> merge(Prepared prepared, List<ChatMessage> arrived) {
-        Set<UUID> excluded = predecessors(prepared);
-        Map<UUID, ChatMessage> result = new LinkedHashMap<>();
-        for (ChatMessage message : prepared.stored()) {
-            add(result, message, prepared, excluded);
+    /** Ein gemeinsamer SQL-Lesestand trennt bekannte Vorgänger von erst während des Ladens gespeicherten IDs. */
+    private Prepared readHistory(UUID roomId, UUID cursorId, List<ChatMessage> recent) {
+        history.beginSnapshot();
+        ChatMessage cursor = history.find(cursorId);
+        if (cursor == null) {
+            cursor = find(recent, cursorId);
         }
-        boolean cursorInBuffer = find(prepared.recent(), prepared.cursor().id()) != null;
-        for (ChatMessage message : prepared.recent()) {
-            if (cursorInBuffer || compare(message, prepared.cursor()) > 0) {
-                add(result, message, prepared, excluded);
-            }
+        if (cursor == null || !roomId.equals(cursor.roomId())) {
+            throw new ResponseStatusException(HttpStatus.NOT_FOUND, "Unknown cursor in this room");
         }
-        // Neu eingetroffene Ereignisse können trotz späteren Empfangs eine ältere Uhrzeit tragen.
-        for (ChatMessage message : arrived) {
-            add(result, message, prepared, excluded);
-        }
-        if (result.size() > properties.replayLimit() || result.size() > properties.clientBufferSize()) {
+        int replayLimit = properties.replayLimit();
+        int maximumRows = Math.addExact(replayLimit, 1);
+        List<ChatMessage> stored = history.after(roomId, cursor, maximumRows);
+        if (stored.size() > replayLimit) {
             throw limitExceeded();
         }
-        List<ChatMessage> ordered = new ArrayList<>(result.values());
-        ordered.sort(this::compare);
-        return ordered;
+        Set<UUID> excluded = predecessors(roomId, cursorId, recent);
+        int historySize = properties.historySize();
+        List<UUID> storedPredecessors = history.beforeIds(roomId, cursor, historySize);
+        for (UUID id : storedPredecessors) {
+            if (excluded.size() >= historySize) {
+                break;
+            }
+            excluded.add(id);
+        }
+        return new Prepared(roomId, cursor, recent, stored, excluded);
     }
 
-    /** Die beobachtete RAM-Position verhindert, dass bekannte Vorgänger durch SQL erneut erscheinen. */
-    private Set<UUID> predecessors(Prepared prepared) {
+    /** Erst geordnete Historie ausgeben, danach neue Übergabe-Ereignisse FIFO anhängen. */
+    public List<ChatMessage> merge(Prepared prepared, List<ChatMessage> arrived) {
+        Map<UUID, ChatMessage> historyById = new LinkedHashMap<>();
+        List<ChatMessage> stored = prepared.stored();
+        for (ChatMessage message : stored) {
+            add(historyById, message, prepared);
+        }
+        List<ChatMessage> recent = prepared.recent();
+        ChatMessage cursor = prepared.cursor();
+        UUID cursorId = cursor.id();
+        boolean cursorInBuffer = find(recent, cursorId) != null;
+        for (ChatMessage message : recent) {
+            if (cursorInBuffer || compare(message, cursor) > 0) {
+                add(historyById, message, prepared);
+            }
+        }
+        List<ChatMessage> ordered = new ArrayList<>(historyById.values());
+        ordered.sort(this::compare);
+        // putIfAbsent erhält bei Überschneidungen die schon vorbereitete historische Kopie.
+        Map<UUID, ChatMessage> complete = new LinkedHashMap<>();
+        for (ChatMessage message : ordered) {
+            add(complete, message, prepared);
+        }
+        for (ChatMessage message : arrived) {
+            add(complete, message, prepared);
+        }
+        if (complete.size() > properties.replayLimit() || complete.size() > properties.clientBufferSize()) {
+            throw limitExceeded();
+        }
+        return new ArrayList<>(complete.values());
+    }
+
+    /** Beobachtete RAM-Vorgänger haben Vorrang; die Ausschlussmenge bleibt samt Cursor begrenzt. */
+    private Set<UUID> predecessors(UUID roomId, UUID cursorId, List<ChatMessage> recent) {
         Set<UUID> excluded = new HashSet<>();
-        UUID cursorId = prepared.cursor().id();
-        if (find(prepared.recent(), cursorId) != null) {
-            for (ChatMessage message : prepared.recent()) {
-                excluded.add(message.id());
+        ChatMessage bufferedCursor = find(recent, cursorId);
+        if (bufferedCursor != null) {
+            for (ChatMessage message : recent) {
+                if (roomId.equals(message.roomId())) {
+                    excluded.add(message.id());
+                }
                 if (cursorId.equals(message.id())) {
                     break;
                 }
@@ -91,15 +126,18 @@ public class ReplayService {
         return excluded;
     }
 
-    /** Aktuelle RAM-Daten erhalten beim ID-Abgleich ihren ursprünglichen Nachrichteninhalt. */
-    private void add(Map<UUID, ChatMessage> result, ChatMessage message,
-                     Prepared prepared, Set<UUID> excluded) {
-        if (prepared.roomId().equals(message.roomId()) && !excluded.contains(message.id())) {
-            result.put(message.id(), message);
+    /** ID-Abgleich entfernt alte Kopien und Überschneidungen, ohne neue alte Zeitstempel zu verwerfen. */
+    private void add(Map<UUID, ChatMessage> result, ChatMessage message, Prepared prepared) {
+        UUID roomId = prepared.roomId();
+        UUID messageRoom = message.roomId();
+        UUID messageId = message.id();
+        Set<UUID> excluded = prepared.excluded();
+        if (roomId.equals(messageRoom) && !excluded.contains(messageId)) {
+            result.putIfAbsent(messageId, message);
         }
     }
 
-    /** Ein begrenzter linearer Durchlauf ist hier verständlicher als ein zusätzlicher unbeschränkter Index. */
+    /** Ein begrenzter linearer Durchlauf braucht keinen weiteren dauerhaften Index. */
     private ChatMessage find(List<ChatMessage> messages, UUID id) {
         for (ChatMessage message : messages) {
             if (id.equals(message.id())) {
@@ -109,14 +147,18 @@ public class ReplayService {
         return null;
     }
 
-    /** Kanonischer UUID-Text entspricht der SQL-Reihenfolge auch oberhalb des Vorzeichenbits. */
+    /** Nur Historie wird sortiert; kanonischer UUID-Text entspricht auch bei grossen IDs der SQL-Reihenfolge. */
     private int compare(ChatMessage first, ChatMessage second) {
-        int byTime = first.sentAt().compareTo(second.sentAt());
+        Instant firstTime = first.sentAt();
+        Instant secondTime = second.sentAt();
+        int byTime = firstTime.compareTo(secondTime);
         if (byTime != 0) {
             return byTime;
         }
-        String firstId = first.id().toString();
-        String secondId = second.id().toString();
+        UUID firstUuid = first.id();
+        UUID secondUuid = second.id();
+        String firstId = firstUuid.toString();
+        String secondId = secondUuid.toString();
         return firstId.compareTo(secondId);
     }
 

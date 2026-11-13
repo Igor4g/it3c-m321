@@ -41,7 +41,8 @@ public class StreamService {
     public SseEmitter open(UUID roomId, UUID cursorId) {
         awaitConsumer();
         SseEmitter emitter = new SseEmitter(0L);
-        StreamSession session = new StreamSession(roomId, properties.clientBufferSize(), emitter, this::remove);
+        int clientCapacity = properties.clientBufferSize();
+        StreamSession session = new StreamSession(roomId, clientCapacity, emitter, this::remove);
         List<ChatMessage> snapshot = List.of();
         synchronized (monitor) {
             Set<StreamSession> roomClients = clients.get(roomId);
@@ -60,7 +61,8 @@ public class StreamService {
                 synchronized (monitor) {
                     List<ChatMessage> arrived = session.pendingSnapshot();
                     List<ChatMessage> ordered = replayService.merge(prepared, arrived);
-                    session.prepareReplay(ordered);
+                    Set<UUID> excludedIds = prepared.excluded();
+                    session.prepareReplay(ordered, excludedIds);
                 }
             }
             session.start();

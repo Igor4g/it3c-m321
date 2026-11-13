@@ -9,6 +9,8 @@ import java.io.IOException;
 import java.time.Duration;
 import java.time.Instant;
 import java.util.UUID;
+import java.util.List;
+import java.util.Set;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.LinkedBlockingQueue;
 import java.util.concurrent.TimeUnit;
@@ -35,6 +37,36 @@ class StreamSessionTest {
         session.close();
         session.close();
         assertEquals(1, closed.get());
+    }
+
+    /** Cursor-Ausschlüsse müssen auch bei vollem rollenden Duplikatfenster erhalten bleiben. */
+    @Test
+    void retainsCursorAfterLiveDeduplicationWindowRollsOver() throws Exception {
+        RecordingEmitter emitter = new RecordingEmitter();
+        UUID roomId = UUID.randomUUID();
+        StreamSession session = new StreamSession(roomId, 1, emitter, ignored -> { });
+        ChatMessage cursor = message("cursor");
+        ChatMessage first = message("history");
+        ChatMessage second = message("new live event");
+        UUID cursorId = cursor.id();
+        Set<UUID> excludedIds = Set.of(cursorId);
+        List<ChatMessage> replay = List.of(first);
+        try {
+            session.prepareReplay(replay, excludedIds);
+            session.start();
+            ChatMessage replayed = emitter.messages.poll(5, TimeUnit.SECONDS);
+            assertEquals(first, replayed);
+            boolean liveAccepted = session.offer(second);
+            assertTrue(liveAccepted);
+            ChatMessage liveMessage = emitter.messages.poll(5, TimeUnit.SECONDS);
+            assertEquals(second, liveMessage);
+            boolean cursorIgnored = session.offer(cursor);
+            assertTrue(cursorIgnored);
+            ChatMessage extra = emitter.messages.poll(200, TimeUnit.MILLISECONDS);
+            assertNull(extra);
+        } finally {
+            session.close();
+        }
     }
 
     /** Ein blockierter Socket darf weder Puffergrenze noch einen anderen Worker aufhalten. */

@@ -11,6 +11,7 @@ import java.util.UUID;
 import java.util.ArrayList;
 import java.util.LinkedHashSet;
 import java.util.List;
+import java.util.Set;
 import java.util.concurrent.ArrayBlockingQueue;
 import java.util.concurrent.BlockingQueue;
 import java.util.concurrent.TimeUnit;
@@ -26,6 +27,7 @@ public class StreamSession {
     private final Consumer<StreamSession> onClosed;
     private final int capacity;
     private final LinkedHashSet<UUID> seen = new LinkedHashSet<>();
+    private Set<UUID> excluded = Set.of();
     private final AtomicBoolean closed = new AtomicBoolean();
     private boolean overflowed;
     private volatile Thread worker;
@@ -56,14 +58,15 @@ public class StreamSession {
         if (closed.get() || overflowed) {
             return false;
         }
-        if (seen.contains(message.id())) {
+        UUID messageId = message.id();
+        if (excluded.contains(messageId) || seen.contains(messageId)) {
             return true;
         }
         if (!pending.offer(message)) {
             overflowed = true;
             return false;
         }
-        seen.add(message.id());
+        seen.add(messageId);
         if (seen.size() > capacity) {
             seen.removeFirst();
         }
@@ -76,12 +79,14 @@ public class StreamSession {
     }
 
     /** Ersetzt unter der Registrierungssperre den Übergabepuffer durch die vollständige geordnete Folge. */
-    public synchronized void prepareReplay(List<ChatMessage> messages) {
+    public synchronized void prepareReplay(List<ChatMessage> messages, Set<UUID> excludedIds) {
         if (closed.get() || overflowed || messages.size() > capacity) {
             throw new ResponseStatusException(HttpStatus.CONFLICT, "Replay buffer exceeded");
         }
         pending.clear();
         seen.clear();
+        // Diese begrenzten alten IDs dürfen nicht aus dem rollenden Live-Fenster herausfallen.
+        excluded = Set.copyOf(excludedIds);
         for (ChatMessage message : messages) {
             offer(message);
         }

@@ -642,7 +642,17 @@ damit auch Verbindungsfehler beim Transaktionsbeginn in HTTP 503 übersetzt werd
 
 **Test:** `mvn -pl chat-service test "-Dtest=StreamReconnectIntegrationTest,StreamSessionTest,MessageHistoryIntegrationTest"`.
 
-**Geprüft und korrigiert:** Noch nicht durchgeführt.
+**Geprüft und korrigiert:** 13.11.2026, KI-Nachprüfung: alle 14 Tests grün,
+keine Fehler oder Auslassungen. Neuer realer HTTP-/RabbitMQ-/SQL-Test übernimmt
+die kalte Instanz aus der unabhängigen Reproduktion: fehlende Nachricht einmal,
+anschliessend keine späte Kopie von Vorgänger oder Cursor; eine neue ältere ID
+wird weiterhin zugestellt. Der Tabellen-Sperrtest erwartet jetzt gespeicherte
+Historie vor FIFO-Übergabe und speichert das neuere Ereignis mit älterer Uhrzeit
+zusätzlich in PostgreSQL. Drei Sitzungstests prüfen auch den dauerhaft gemerkten
+Cursor bei Client-Kapazität 1. SQL-Vorgängerabfrage auf Raum, UUID-Gleichstand
+und Limit geprüft. DB-Ausfall bleibt 503 für Replay und beeinträchtigt Live nicht.
+Der alte veröffentlichte Tag bleibt unverändert. Dies ist eine technische
+KI-Prüfung, keine erfundene Bestätigung eines persönlichen Lernenden-Reviews.
 
 ### Nachprüfung N2 — Verschachtelte Aufrufe und Stil
 

@@ -93,7 +93,10 @@ class StreamReconnectIntegrationTest {
         try (TestChat application = new TestChat(broker, TestDatabase.arguments(database));
              var requests = Executors.newVirtualThreadPerTaskExecutor()) {
             ChatMessage cursor = storedMessage(room, Instant.parse("2026-11-13T10:00:00Z"), "cursor");
+            Instant historyTime = cursor.sentAt().plusSeconds(1);
+            ChatMessage historical = storedMessage(room, historyTime, "missing before loading");
             TestDatabase.save(application, cursor);
+            TestDatabase.save(application, historical);
             DataSource source = application.context.getBean(DataSource.class);
             StreamService streams = application.context.getBean(StreamService.class);
             try (Connection lock = source.getConnection()) {
@@ -101,6 +104,7 @@ class StreamReconnectIntegrationTest {
                 lockTable(lock);
                 var future = requests.submit(() -> new SseClient(application, room, cursor.id().toString()));
                 List<ChatMessage> expected;
+                java.util.concurrent.Future<?> write = null;
                 try {
                     await().atMost(Duration.ofSeconds(3)).until(() -> streams.connectionCount() == 1);
                     assertFalse(future.isDone(), "The DB query must still be blocked");
@@ -113,12 +117,15 @@ class StreamReconnectIntegrationTest {
                     publisher.convertAndSend(QueueNames.DELIVERY_EXCHANGE, "", delayed);
                     RecentMessageBuffer recent = application.context.getBean(RecentMessageBuffer.class);
                     await().atMost(Duration.ofSeconds(3)).until(() -> recent.find(delayed.id()) != null);
-                    expected = List.of(delayed, first, second);
+                    // Der neue alte Zeitstempel wird zusätzlich gespeichert, sobald die Sperre frei ist.
+                    write = requests.submit(() -> TestDatabase.save(application, delayed));
+                    expected = List.of(historical, first, second, delayed);
                 } finally {
                     lock.rollback();
                 }
                 try (SseClient resumed = future.get(10, TimeUnit.SECONDS)) {
-                    assertEquals(expected, resumed.take(3, Duration.ofSeconds(5)));
+                    write.get(10, TimeUnit.SECONDS);
+                    assertEquals(expected, resumed.take(4, Duration.ofSeconds(5)));
                     resumed.assertQuiet(Duration.ofMillis(200));
                     ChatMessage next = application.send(room, "sender", "live after transition");
                     assertEquals(next, resumed.take(1, Duration.ofSeconds(5)).getFirst());
@@ -163,6 +170,42 @@ class StreamReconnectIntegrationTest {
                 resumed.assertQuiet(Duration.ofMillis(300));
                 ChatMessage next = application.send(room, "sender", "new after duplicate");
                 assertEquals(next, resumed.take(1, Duration.ofSeconds(5)).getFirst());
+            }
+        }
+    }
+
+    /** Ein kalter Live-Puffer darf bekannte SQL-Vorgänger und den Cursor nach der Übergabe nicht erneut zeigen. */
+    @Test
+    void ignoresDelayedCursorAndStoredPredecessorButDeliversNewOlderTimestamp() throws Exception {
+        UUID room = UUID.randomUUID();
+        String[] arguments = TestDatabase.arguments(database);
+        try (TestChat application = new TestChat(broker, arguments)) {
+            Instant time = Instant.parse("2026-11-13T10:00:00Z");
+            ChatMessage previous = storedMessage(room, time, "already received predecessor");
+            Instant cursorTime = time.plusSeconds(1);
+            ChatMessage cursor = storedMessage(room, cursorTime, "already received cursor");
+            Instant missingTime = time.plusSeconds(2);
+            ChatMessage missing = storedMessage(room, missingTime, "missing history");
+            TestDatabase.save(application, previous);
+            TestDatabase.save(application, cursor);
+            TestDatabase.save(application, missing);
+            UUID cursorId = cursor.id();
+            String lastId = cursorId.toString();
+            try (SseClient resumed = new SseClient(application, room, lastId)) {
+                Duration timeout = Duration.ofSeconds(5);
+                List<ChatMessage> received = resumed.take(1, timeout);
+                assertEquals(List.of(missing), received);
+                RabbitTemplate publisher = application.context.getBean(RabbitTemplate.class);
+                publisher.convertAndSend(QueueNames.DELIVERY_EXCHANGE, "", missing);
+                publisher.convertAndSend(QueueNames.DELIVERY_EXCHANGE, "", previous);
+                publisher.convertAndSend(QueueNames.DELIVERY_EXCHANGE, "", cursor);
+                resumed.assertQuiet(Duration.ofMillis(300));
+                Instant olderTime = time.minusSeconds(1);
+                ChatMessage genuinelyNew = storedMessage(room, olderTime, "new id despite older clock");
+                publisher.convertAndSend(QueueNames.DELIVERY_EXCHANGE, "", genuinelyNew);
+                List<ChatMessage> newMessages = resumed.take(1, timeout);
+                assertEquals(List.of(genuinelyNew), newMessages);
+                resumed.assertQuiet(Duration.ofMillis(200));
             }
         }
     }

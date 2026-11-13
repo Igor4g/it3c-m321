@@ -43,6 +43,17 @@ class MessageHistoryIntegrationTest {
             assertNull(history.find(UUID.randomUUID()));
             assertEquals(List.of(second, third), history.after(room, first, 10));
             assertEquals(List.of(second), history.after(room, first, 1));
+            List<UUID> predecessors = history.beforeIds(room, third, 10);
+            UUID firstId = first.id();
+            UUID secondId = second.id();
+            List<UUID> expectedPredecessors = List.of(secondId, firstId);
+            assertEquals(expectedPredecessors, predecessors);
+            List<UUID> limitedPredecessors = history.beforeIds(room, third, 1);
+            List<UUID> expectedLimited = List.of(secondId);
+            assertEquals(expectedLimited, limitedPredecessors);
+            UUID otherRoom = UUID.randomUUID();
+            List<UUID> foreignPredecessors = history.beforeIds(otherRoom, third, 10);
+            assertTrue(foreignPredecessors.isEmpty());
             assertTrue(history.after(UUID.randomUUID(), first, 10).isEmpty());
         }
     }
