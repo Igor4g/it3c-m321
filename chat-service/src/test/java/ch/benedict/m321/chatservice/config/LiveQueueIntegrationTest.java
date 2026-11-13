@@ -49,6 +49,9 @@ class LiveQueueIntegrationTest {
             assertNotNull(secondAdmin.getQueueInfo(secondName));
             assertBound(firstName);
             assertBound(secondName);
+            await().atMost(Duration.ofSeconds(10)).until(
+                    () -> firstAdmin.getQueueInfo(firstName).getConsumerCount() == 1);
+            assertEquals(1, secondAdmin.getQueueInfo(secondName).getConsumerCount());
 
             second.close();
             await().atMost(Duration.ofSeconds(30)).until(
@@ -69,7 +72,8 @@ class LiveQueueIntegrationTest {
                 .run("--spring.rabbitmq.host=" + brokerHost,
                         "--spring.rabbitmq.port=" + brokerPort,
                         "--spring.rabbitmq.username=" + rabbitMq.getAdminUsername(),
-                        "--spring.rabbitmq.password=" + rabbitMq.getAdminPassword());
+                        "--spring.rabbitmq.password=" + rabbitMq.getAdminPassword(),
+                        "--logging.level.root=WARN", "--debug=false");
     }
 
     /** Liest die Broker-Bindungen, statt nur die Spring-Konfiguration anzusehen. */

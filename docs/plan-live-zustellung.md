@@ -252,7 +252,14 @@ Prüfen: echtes HTTP-SSE statt nur MockMvc, korrekte ID/JSON, kein fremder Raum,
 ein Consumer pro Queue und Aufräumen bei Abschluss/Fehler. Den ersten Kommentar
 ohne Chat-ID/Chat-Daten empfangen können, bevor die erste Nachricht gesendet wird.
 
-**Geprüft und korrigiert:** Noch nicht durchgeführt.
+**Geprüft und korrigiert:** 13.11.2026, KI-Selbstprüfung: 4 echte HTTP-/RabbitMQ-
+Tests grün, 0 Fehler und 0 übersprungen. Unicode/Zeilenumbruch und alle sechs
+Felder, fremder Raum, ungültige UUIDs, genau ein Consumer und Aufräumen geprüft.
+Korrigiert: `server.shutdown=immediate`, weil ein Graceful Shutdown auf absichtlich
+offene SSE-Anfragen wartete. Der Abbruchtest erzeugt normale weitere Schreibversuche;
+ein TCP-Abbruch ist nicht zwingend vor dem nächsten Schreiben sichtbar.
+Eigene Sitzungsausgabe und Testclient sind getrennt. Ein persönlicher Review des
+Lernenden wurde noch nicht als erfolgt bestätigt.
 
 ### Schritt 3a — Geordnete Annahme und Veröffentlichung
 
