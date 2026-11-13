@@ -1,0 +1,507 @@
+# Umsetzungsplan — Live-Zustellung
+
+**Vom Lernenden am 13.11.2026 freigegebener Plan vor Implementierungsbeginn.**
+
+Grundlage ist die vom Lernenden verfasste
+[Spezifikation](spec-live-zustellung.md). Dieser Plan wurde mit KI-Unterstützung
+erstellt. Es hat noch keine Implementierung der Live-Zustellung begonnen.
+
+## 1. Voraussetzungen vor dem ersten Implementierungsschritt
+
+DB-Entscheidung des Lernenden am 13.11.2026: Wiederaufnahme braucht eine erreichbare
+DB; bei DB-Ausfall HTTP 503. Live ohne Header bleibt davon unabhängig.
+
+Vor dem ersten Implementierungsschritt werden diese Handlungen in Reihenfolge
+ausgeführt: die technische Prüffassung und die eigene Spezifikation gemeinsam
+prüfen, die Dokumente vom Lernenden freigeben lassen, sie committen und nach
+ausdrücklicher Zustimmung auf `main` pushen. Danach auf GitHub den veröffentlichten
+Commit prüfen. Dessen Kennung wird im Feld `Geprüft und korrigiert` von Schritt 1
+als Beleg für den vorausgehenden Plan-Push festgehalten.
+
+Diese Reihenfolge ist Teil des festen Plans. Nach der Veröffentlichung werden hier
+keine Freigabe-Checkboxen nachgetragen; laufende Nachweise gehören ausschliesslich
+in die dafür vorgesehenen Prüfnotizen.
+
+Bis dahin sind die folgenden Schritte Vorschläge zur Prüfung. Die genannten neuen
+Testklassen und Prüfskripte **existieren noch nicht**. Ihre Befehle beschreiben die
+geplanten Prüfeinstiege und sind keine Behauptung bereits erfolgreicher Tests.
+
+## 2. Arbeitsweise nach Veröffentlichung
+
+Jeder Schritt umfasst ein Thema, seinen Test und einen eigenen Commit. Der Lernende
+erteilt den unten wörtlich festgehaltenen KI-Auftrag, liest die Änderungen und prüft
+das Ergebnis. Erst danach wird committet. Das Feld `Geprüft und korrigiert` wird mit
+dem tatsächlichen Test, Ergebnis und den angenommenen oder verworfenen Änderungen
+ergänzt. Die KI kann bei der Prüfung helfen; eine Prüfung des Lernenden wird nicht
+erfunden.
+
+Commit-Texte sind deutsch. Commits mit KI-Beiträgen enthalten eine passende
+`Co-Authored-By: Codex <codex@localhost>`-Zeile. Das ist eine lokale technische
+Kennung, kein behauptetes offizielles E-Mail-Konto. Neue Variablen stehen in `.env.example`, nicht in Git
+versionierten Geheimnissen. `CLAUDE.md` gilt für Produktions- und Testcode.
+
+Nach der Veröffentlichung bleibt der ursprüngliche Plan stehen. Umplanungen
+werden vor ihrer Umsetzung als eigener Eintrag mit `Änderungsgrund` in einem
+eigenen Commit ergänzt. Ausnahme: das vorgesehene Feld `Geprüft und korrigiert`.
+Pushes, Tags und die Abgabe erfolgen nur mit der Zustimmung des Lernenden.
+
+## 3. Technische Leitplanken
+
+- Bestehendes Spring MVC mit `SseEmitter` erweitern, keine neue Oberfläche und
+  kein WebFlux, Gateway, Login-System oder neues Produktionsmodul.
+- HTTP-Routing über einen `StreamController`; Raum- und Verbindungsverwaltung
+  über einen `StreamService`; eine verständliche `StreamSession` pro Verbindung.
+- Der Compose-Dienst bleibt `chat-service` und hat kein `container_name`.
+  Kein Dienst veröffentlicht einen Host-Port. Tests erreichen jede Instanz
+  einzeln innerhalb von `chat-net`.
+- Genau eine temporäre, exklusive, nicht dauerhafte, automatisch entfernte Queue
+  je Instanz an `chat.delivery`; genau ein Consumer, `prefetch=1`, maximal
+  999 wartende Nachrichten, Überlauf mit `drop-head`.
+- Spring-Listener bestätigt nach erfolgreicher lokaler Übernahme. Das ist kein
+  Beweis der Anzeige beim Client. Die bestehende Persistenz-Queue bleibt erhalten.
+- Ein geordneter Ausgabeweg und begrenzter Puffer je Client. Kein Netzwerk-Schreiben
+  unter einer gemeinsamen Sperre oder direkt als blockierende Arbeit im Consumer.
+- PostgreSQL ausschliesslich für den neuen Lesepfad anbinden. Live darf weder
+  beim Start noch bei späteren Ausfällen auf eine verfügbare DB angewiesen sein.
+  Wiederaufnahme mit `Last-Event-ID` braucht dagegen eine erfolgreiche DB-Abfrage.
+- Höchstens 10'000 Nachrichten in der jüngsten Instanz-Historie, im Puffer einer
+  Client-Verbindung und je Nachlieferung. Keine unbegrenzt wachsenden ID-Sets.
+- Heartbeats als SSE-Kommentare ohne Nachrichten-ID und ohne Chat-`data` planen,
+  damit sie nicht als zusätzliche Nachrichten in die Szenariozählung eingehen.
+- UUIDs nicht als zeitliche Reihenfolge interpretieren. Für Geschichte und
+  Übergabe gilt das unten festgelegte Modell; Live-Ausgaben bleiben pro Client FIFO.
+- Keine globale Exactly-once-Garantie behaupten. Die verlangten Mengen,
+  Duplikatfreiheit und Reihenfolgen werden in den konkreten Szenarien nachgewiesen.
+
+### 3.1 Reihenfolge und Zeitstempel
+
+Die verlangte Reihenfolge eines Absenders beginnt bei dessen nacheinander
+angenommenen POSTs. Konkurrierende Anfragen verschiedener Absender benötigen
+keine gemeinsame globale Reihenfolge. Ein Raum- oder instanzübergreifender
+zentraler Sequenzdienst wird nicht eingeführt.
+
+In jeder Instanz werden Identitäts-/Zeitvergabe und Veröffentlichung eines POSTs
+in einem kurzen synchronisierten Annahmeweg ausgeführt. Neue `sentAt`-Werte haben
+Mikrosekundenpräzision und steigen innerhalb dieser Instanz strikt: bei gleicher
+oder rückläufiger Uhrzeit wird eine Mikrosekunde auf den vorherigen Wert addiert.
+Damit gehen Reihenfolge und Zeitpräzision beim Speichern nicht allein durch
+Nanosekundenrundung verloren. Ein Test mit gleicher und rückläufiger Uhr prüft das.
+
+Der Publisher verwendet die bereits vorgesehene getrennte Publisher-Verbindung,
+deren Kanal-Cache auf einen Kanal mit endlichem Checkout-Timeout begrenzt wird.
+Consumer teilen diese Begrenzung nicht. Die beiden vorhandenen Publikationen
+bleiben in der Reihenfolge Persistenz, dann Fanout; sie sind keine atomare
+Transaktion über beide Ziele.
+
+Für die nachzuliefernde Historie wird nach `sentAt` aufsteigend sortiert, bei
+Gleichstand nach der kanonischen UUID-Zeichenfolge. Gleiche Werte werden damit
+deterministisch behandelt; die UUID allein ist kein Zeitstempel. SQL und Java
+müssen denselben Vergleich benutzen. Alte gleiche Zeitstempel erlauben keine
+Rekonstruktion einer ursprünglich nicht gespeicherten Reihenfolge. Insbesondere
+wird keine globale Sendereihenfolge konkurrierender Instanzen versprochen.
+
+Live-Ereignisse gehen in der Empfangsreihenfolge des einzigen Queue-Consumers an
+den einzigen Ausgabeweg jeder Sitzung. Eine Kopie wird nie zusätzlich direkt vom
+POST-Handler an SSE gesendet: sonst käme sie über den Fanout ein zweites Mal an.
+
+### 3.2 Wiederaufnahme und Übergabe
+
+1. UUID-Parameter prüfen. Ohne Header die Sitzung unter der lokalen
+   Koordinationssperre registrieren und live starten, ohne JDBC aufzurufen.
+2. Mit Header die Sitzung zuerst als nachladend registrieren. Den jüngsten
+   Nachrichtenpuffer unter derselben Sperre kopieren. Neue Ereignisse werden
+   für diese Sitzung ab jetzt begrenzt gesammelt.
+3. Ausserhalb der Sperre PostgreSQL lesen. Bei technischem DB-Fehler 503 und die
+   vorbereitete Sitzung entfernen. Der RAM-Puffer ersetzt diesen DB-Zugriff nicht.
+4. Den Cursor anhand seiner ID in DB oder aktueller Historie suchen und den Raum
+   prüfen. Nach erfolgreichem DB-Zugriff bedeutet unbekannt/raumfremd 404. Ein
+   nur in RAM vorhandener Cursor ist zulässig: der Writer kann verzögert sein.
+5. Den DB-Raumverlauf nach dem Cursor anhand des vereinbarten Vergleichs lesen;
+   maximal Limit plus eins lesen, damit Abschneiden erkennbar bleibt. Ist der
+   Cursor in der jüngsten RAM-Historie enthalten, dessen tatsächliche Position
+   benutzen: dort bereits vor dem Cursor empfangene IDs werden nicht durch eine
+   DB-Überschneidung erneut nachgeliefert. Jüngste tatsächliche Nachfolger des
+   Cursors bleiben Kandidaten, auch bei gleichen oder abweichenden Zeitstempeln.
+6. Unter der lokalen Sperre DB-Ergebnis, kopierte jüngste Nachrichten und inzwischen
+   gesammelte Ereignisse anhand ihrer ID zusammenführen. Nur den gewählten Raum
+   übernehmen und die Cursor-ID ausschliessen. Während der Registrierung neu
+   eingetroffene Ereignisse nicht allein wegen `sentAt <= Cursor-Zeit` verwerfen:
+   ein später empfangenes Ereignis kann einen älteren Zeitstempel haben. Den
+   Historienvergleich und die beobachtete Absenderfolge beachten und die Grenzen
+   prüfen. Kein SQL und kein SSE-Schreiben innerhalb dieser Sperre.
+7. Die vorbereitete Folge in den geordneten Sitzungspuffer übergeben und die Sitzung
+   unter derselben Sperre auf Live umschalten. Neu eintreffende Ereignisse werden
+   danach hinter der vorbereiteten Folge eingereiht. Bei Überlappungen mit bereits
+   nachgeladenen IDs werden sie innerhalb des begrenzten Abgleichs nicht verdoppelt.
+8. Erst nach erfolgreicher Vorbereitung den SSE-Stream öffnen. Ein Ausgabe-Worker
+   pro Sitzung sendet die vorbereitete Folge und spätere Live-Ereignisse. Vor dem
+   ersten HTTP-Stream kann ein Fehlerstatus zurückgegeben werden, danach wird bei
+   Fehlern nur die betroffene Sitzung beendet.
+
+Die gemeinsame Sperre schützt nur die lokale Registrierung, Pufferübergabe und
+Zustandsänderung. Sie ist keine verteilte Transaktion. Abgleichsdaten und Puffer
+sind begrenzt. Unterbrechungen, bei denen Nachrichten weder in der DB noch im
+jüngsten Puffer vorhanden sind, können nicht allgemein rekonstruiert werden.
+Erkennbare Lücken oder überschrittene Grenzen werden nicht als vollständige
+Nachlieferung ausgegeben. S7 sowie Datenbankverzögerung und gleichzeitiger
+Live-Eingang müssen den tatsächlichen Ablauf mit realen Diensten nachweisen.
+
+### 3.3 Grenzen, Fehler und Betrieb
+
+- Fehlendes/ungültiges `roomId`, ungültiger Header: HTTP 400.
+- Unbekannter oder raumfremder Cursor nach erfolgreicher DB-Prüfung: HTTP 404.
+- Überschrittene Nachlieferungsgrenze oder erkannte nicht überbrückbare Lücke:
+  HTTP 409 vor Beginn des Streams. Abbrechen statt einen Teil als vollständig senden.
+- Datenbank bei Wiederaufnahme nicht erreichbar: HTTP 503, auch wenn RAM-Daten
+  vorhanden sind. Bestehende und neue reine Live-Verbindungen bleiben unabhängig.
+- Je Instanz-Historie, Sitzungspuffer und Nachlieferung: 10'000 Nachrichten.
+  Konfiguration über `LIVE_HISTORY_SIZE`, `LIVE_CLIENT_BUFFER_SIZE`,
+  `LIVE_REPLAY_LIMIT` mit diesen Standardwerten in `.env.example`.
+- Heartbeat alle 15 Sekunden als SSE-Kommentar, ohne Chat-ID oder Chat-Daten.
+- Direkt nach erfolgreicher Registrierung/Vorbereitung einen ersten Kommentar
+  senden, damit HTTP-Header und Stream sofort sichtbar werden. Testclients müssen
+  nicht bis zum ersten Chat-Ereignis oder dem ersten 15-Sekunden-Heartbeat warten.
+- Ersten Stream erst freigeben, wenn eigene Queue und Consumer verfügbar sind.
+  Timeouts, IOException und Abschluss räumen die Sitzung auf.
+- JDBC-Verbindung mit kurzem Connect-/Socket-/Pool-Timeout; kein blockierender
+  Pool-Start oder SQL-Init. Compose startet den Chat-Service weiterhin unabhängig
+  von einer gesunden PostgreSQL; keine zusätzliche DB-Startabhängigkeit.
+- Bei einer einzelnen abgebrochenen/überfüllten Sitzung nicht auf deren
+  Netzwerk-Schreibvorgang warten und keine anderen Verbindungen unterbrechen.
+- Connection-Recovery deklariert Queue und Bindung erneut und startet den Consumer
+  wieder. Insbesondere darf nach S6 kein manueller Service-Neustart nötig sein.
+
+### 3.4 Nachweise und technische Quellen
+
+- [Spring AMQP: strikte Publisher-Reihenfolge](https://docs.spring.io/spring-amqp/reference/amqp/template.html)
+  beschreibt einen auf einen Kanal begrenzten Publisher-Cache samt Checkout-Timeout
+  und die Trennung von Consumer-Verbindungen. Die benötigten Methoden wurden vor
+  Implementierungsbeginn am lokalen Spring-Rabbit-JAR **3.2.12** per `javap` geprüft.
+- [PostgreSQL 16: Zeittypen](https://www.postgresql.org/docs/16/datatype-datetime.html)
+  dokumentiert Mikrosekundenpräzision für `timestamptz`.
+- [HTTP 409](https://www.rfc-editor.org/rfc/rfc9110.html#name-409-conflict)
+  ist unsere Entscheidung für eine nicht erfüllbare Nachlieferung im aktuellen
+  Zustand; der Bewertungsauftrag schreibt diesen Statuscode nicht vor.
+- Java 21.0.9 und Maven 3.9.9 sind lokal vorhanden. Maven liegt in der vorhandenen
+  IntelliJ-Installation; für Prüfungen dessen `bin` und Java 21 in den Prozess-PATH
+  aufnehmen. Kein globales Umstellen der Entwicklungsumgebung erforderlich.
+
+Neue Tests für diese Entscheidungen: gleiche Zeitstempel und Uhrenrücksprung,
+deterministische ID-Gleichstände, parallele POSTs innerhalb einer Instanz,
+noch nicht gespeicherter Cursor, Überlappung DB/RAM, Ereignisse während der
+Übergabe, 10'001 statt 10'000 Nachrichten, unbekannter/fremder Cursor und DB-Ausfall.
+Zusätzlich einen während des Nachladens eintreffenden fremden Absender mit älterem
+Zeitstempel prüfen: dessen neue Nachricht darf nicht weggefiltert werden. Ein im
+DB-Ergebnis enthaltener, erst später vom Consumer empfangener Datensatz darf im
+Übergang nicht doppelt erscheinen. Erfolgreich beendete Streams dürfen keine
+Sitzung oder Ausgabeaufgabe zurücklassen.
+
+## 4. Schritte und KI-Aufträge
+
+### Schritt 1 — Instanz-Queue und Lebensdauer
+
+**Ziel und Reihenfolge:** Zuerst die Grundlage des Fanout messbar machen, bevor
+Clients angeschlossen werden. Bestehende Queues und JSON-Verträge erhalten.
+
+**Auftrag an die KI im Wortlaut:**
+
+> Implementiere ausschliesslich die Instanz-Queue aus unserer freigegebenen
+> Spezifikation. Erweitere die vorhandene RabbitConfig um die temporäre Queue und
+> ihre Bindung an chat.delivery. Verwende die vereinbarten Grenzen. Ergänze einen
+> echten RabbitMQ-Test mit zwei getrennten App-Instanzen und dem Entfernen einer
+> Instanz. Beachte CLAUDE.md. Implementiere noch keine SSE-Schnittstelle. Führe den
+> angegebenen Test aus und berichte über Änderungen und Ergebnis. Committe und
+> pushe nichts vor der Prüfung des Lernenden.
+
+**Test:** `mvn -pl chat-service test "-Dtest=LiveQueueIntegrationTest"`.
+Prüfen: zwei getrennte Queues, richtige Bindungen/Argumente, Eigentum und Entfernung
+beim Schliessen einer Instanz; keine Änderung an `chat.persist`/`chat.dlq`.
+Die Prüfung von genau einem aktiven Consumer wird mit Schritt 2 vervollständigt.
+
+**Geprüft und korrigiert:** Noch nicht durchgeführt.
+
+### Schritt 2 — SSE, Raumfilter und Consumer
+
+**Ziel und Reihenfolge:** Nun den kleinsten durchgehenden Live-Weg bauen, auf dem
+anschliessend Skalierung und Fehlerfälle getestet werden können.
+
+**Auftrag an die KI im Wortlaut:**
+
+> Implementiere den Live-Weg aus der freigegebenen Spezifikation: einen Consumer
+> je Instanz-Queue, StreamController für GET /stream?roomId, Raumzuordnung und
+> Verbindungsverwaltung. Nutze SseEmitter und das bestehende Nachrichtenformat.
+> Gib jede Chat-Nachricht mit id und vollständigem JSON als data aus. Halte den
+> Live-Weg unabhängig von PostgreSQL. Ergänze echte HTTP-/RabbitMQ-Tests für
+> Empfang, Raumfilter, Header und Aufräumen. Sende sofort einen anfänglichen
+> SSE-Kommentar, damit die Verbindung vor dem ersten Chat-Ereignis bereit ist.
+> Beachte CLAUDE.md. Implementiere noch
+> keine Nachlieferung. Führe den Test aus und berichte. Kein Commit oder Push vor
+> der Prüfung des Lernenden.
+
+**Test:** `mvn -pl chat-service test "-Dtest=StreamIntegrationTest,LiveQueueIntegrationTest"`.
+Prüfen: echtes HTTP-SSE statt nur MockMvc, korrekte ID/JSON, kein fremder Raum,
+ein Consumer pro Queue und Aufräumen bei Abschluss/Fehler. Den ersten Kommentar
+ohne Chat-ID/Chat-Daten empfangen können, bevor die erste Nachricht gesendet wird.
+
+**Geprüft und korrigiert:** Noch nicht durchgeführt.
+
+### Schritt 3a — Geordnete Annahme und Veröffentlichung
+
+**Ziel und Reihenfolge:** Vor der Verteilung an zwei Instanzen den vorhandenen
+Sendeweg absichern. Dieser Schritt verändert nur Zeitvergabe und Veröffentlichung;
+Client-Ausgabe und Skalierung werden danach getrennt geprüft.
+
+**Auftrag an die KI im Wortlaut:**
+
+> Setze ausschliesslich die Mikrosekunden-Zeitvergabe, die geordnete Annahme und
+> den einzelnen Publisher-Kanal aus Abschnitt 3.1 um. Behalte den JSON-Vertrag,
+> POST /messages und beide Veröffentlichungsziele bei. Verwende keine zentrale
+> Sequenz-Datenbank und keine RabbitMQ-Transaktion für beide Ziele. Prüfe gleiche
+> und rückläufige Uhrzeit, den Publishing-Weg sowie die bestehenden Annahmetests.
+> Beachte CLAUDE.md. Führe die Tests aus und erkläre die Änderungen am Bestand.
+> Kein Commit oder Push vor der Prüfung des Lernenden.
+
+**Test:** `mvn -pl chat-service test "-Dtest=MessageServiceTest,MessageTimestampTest,MessagePublisherIntegrationTest"`.
+Prüfen: streng steigende Mikrosekundenwerte, gleiche IDs/Nutzdaten in beiden
+Publikationswegen und Erhalt der bisherigen 202-Annahme. Synchronisierung und
+Kanalbegrenzung dürfen den Consumer nicht blockieren.
+
+**Geprüft und korrigiert:** Noch nicht durchgeführt.
+
+### Schritt 3b — Begrenzte Client-Ausgabe und Zwei-Instanzen-Test
+
+**Ziel und Reihenfolge:** Auf dem abgesicherten Sendeweg jetzt langsame Clients
+isolieren und die tatsächliche Verteilung an zwei Instanzen nachweisen.
+
+**Auftrag an die KI im Wortlaut:**
+
+> Vervollständige die geordnete und begrenzte Ausgabe je Verbindung. Ein langsamer
+> oder abgebrochener Client darf keinen anderen blockieren. Ergänze S3 mit zwei
+> tatsächlichen App-Instanzen, drei Clients und je 200 POSTs pro Instanz.
+> Vergleiche IDs, vollständige JSON-Inhalte und Absenderreihenfolge. Verwende
+> keine gemeinsam gemockte Verteilung. Prüfe den Überlauf einer Sitzung und die
+> weitere Zustellung an einen gesunden Client. Beachte CLAUDE.md. Führe die Tests
+> aus und berichte. Kein Commit oder Push vor der Prüfung des Lernenden.
+
+**Test:** `mvn -pl chat-service test "-Dtest=LiveDistributionIntegrationTest,StreamSessionTest"`.
+Prüfen: 400 IDs an beiden A-Clients, keine doppelten IDs, B bleibt leer; FIFO und
+Überlauf eines einzelnen Client-Puffers mit unverändert weiterarbeitendem anderen
+Client. Keine zufälligen langen Wartezeiten als Ersatz für Bereitschaftssignale.
+
+**Geprüft und korrigiert:** Noch nicht durchgeführt.
+
+### Schritt 4 — DB-Lesepfad und jüngste Nachrichten
+
+**Ziel und Reihenfolge:** Die Quellen der Nachlieferung erst isoliert prüfen,
+bevor sie mit einer offenen SSE-Verbindung koordiniert werden.
+
+**Auftrag an die KI im Wortlaut:**
+
+> Implementiere den vereinbarten PostgreSQL-Lesepfad und den begrenzten Puffer
+> jüngster Nachrichten. Verwende JdbcTemplate und parametrisierte Abfragen,
+> keine Schreibzugriffe des Chat-Service. Ergänze JDBC-Abhängigkeiten und
+> Beispielkonfiguration nur soweit erforderlich. Stelle sicher, dass Start,
+> POST und Live-Stream nicht auf eine erreichbare DB warten. Prüfe Cursor,
+> Raumfilter, Grenzen und das freigegebene Ordnungsmodell mit echten PostgreSQL-
+> Tests. Beachte CLAUDE.md. Führe die Tests aus und berichte. Kein Commit oder
+> Push vor der Prüfung des Lernenden.
+
+**Test:** `mvn -pl chat-service test "-Dtest=MessageHistoryIntegrationTest,RecentMessageBufferTest"`.
+Prüfen: Cursor in DB bzw. nur im aktuellen Puffer, Ausschluss des Cursors,
+fremder Raum, gleiche Zeitstempel, begrenzter Speicher und keine Änderungen an
+bestehenden Nachrichtenwerten. Danach `mvn clean test` als Prüfung der betroffenen
+bestehenden Spring-Kontexte und des Writers.
+
+**Geprüft und korrigiert:** Noch nicht durchgeführt.
+
+### Schritt 5 — Wiederaufnahme und atomarer Übergang zu Live
+
+**Ziel und Reihenfolge:** Die einzeln geprüften Quellen jetzt ohne Lücke,
+Duplikate oder Überholen durch neue Nachrichten verbinden.
+
+**Auftrag an die KI im Wortlaut:**
+
+> Implementiere Last-Event-ID gemäss unserem freigegebenen Wiederaufnahmemodell.
+> Registriere neue Ereignisse schon während des Ladens der Historie. Führe DB-
+> und Pufferdaten anhand der ID zusammen und übergib sie geordnet an denselben
+> Ausgabeweg. Ergänze die vereinbarten Fehlerantworten und Grenzen. Implementiere
+> S7 mit echtem HTTP, RabbitMQ und PostgreSQL sowie einen Test mit neuen Ereignissen
+> während der Nachlieferung. Beachte CLAUDE.md. Führe die Tests aus und berichte
+> über jedes erkannte Rennen. Kein Commit oder Push vor der Prüfung des Lernenden.
+
+**Test:** `mvn -pl chat-service test "-Dtest=StreamReconnectIntegrationTest"`.
+Prüfen: genau 50 nach 10 s, Cursor nicht erneut, danach Live; noch nicht gespeicherte
+Nachrichten, Überschneidungen, Invalidität, DB-Fehler und neue Ereignisse während
+der Nachlieferung. Ein verspätetes Ereignis mit älterem Zeitstempel darf nicht
+allein deshalb fehlen; ein später vom Broker eintreffender bereits nachgeladener
+Datensatz darf nicht doppelt erscheinen. Auch Wiederaufnahme an der anderen
+Instanz bei verfügbarer Historie prüfen. Grenzen der zugesagten Wiederaufnahme
+ausdrücklich prüfen.
+
+**Geprüft und korrigiert:** Noch nicht durchgeführt.
+
+### Schritt 6 — Dokumentation und Stil vollständig prüfen
+
+**Ziel und Reihenfolge:** Nach der vollständigen Live-/Replay-Implementierung
+Stilprüfung und Dokumentation abschliessen, damit die anschliessende vollständige
+Compose-Abnahme S8 ohne fehlenden CodeStyleTest ausführen kann.
+
+**Auftrag an die KI im Wortlaut:**
+
+> Prüfe den gesamten Chat-Service gegen CLAUDE.md, einschliesslich vorhandener
+> Klassen und Tests. Ergänze verständliche deutsche Zweckkommentare und
+> vereinfache unnötige Abstraktionen. Ergänze einen CodeStyleTest für das
+> Vorhandensein von Kommentaren und das Verbot von Java-Streams. Die tatsächliche
+> deutsche Sprache und Lesbarkeit werden zusätzlich manuell geprüft.
+> Aktualisiere die README-Tabelle Stand,
+> notwendige Beispielvariablen und Abnahmebefehle. Trenne Bewertung 1 vom neuen
+> Umfang. Schreibe die eigene Spezifikation des Lernenden nicht um; melde
+> fachliche Widersprüche zur gemeinsamen Korrektur. Prüfe alle Dokumentlinks.
+> Führe die nötigen Prüfungen aus. Kein Commit oder Push vor der Prüfung des Lernenden.
+
+**Test:** `mvn clean test`, `docker compose config --quiet`, S8-Quelltextprüfung
+und Kontrolle, dass `.env`, `tempContext/` und Prüfartefakte nicht versioniert sind.
+
+**Geprüft und korrigiert:** Noch nicht durchgeführt.
+
+### Schritt 7 — Compose-Abnahme und Ausfälle
+
+**Ziel und Reihenfolge:** Nach Implementierung und Stilprüfung alle Szenarien
+zusammen im Compose-Betrieb prüfen. Queue-Lebensdauer, Prozesspausen und echte
+Ausfälle werden damit vor der Schlussabnahme sichtbar.
+
+**Auftrag an die KI im Wortlaut:**
+
+> Ergänze die reproduzierbaren Compose-Prüfwerkzeuge aus unserem Plan unter
+> chat-service/src/test/acceptance. Das Host-Skript verify-live.ps1 unterstützt
+> -Scenario S2 bis S8 sowie All für den zusammenhängenden Lauf S2 bis S8.
+> Ein Host-Skript darf Docker steuern; SSE-
+> Testclients laufen im internen chat-net und sprechen jede Instanz direkt an.
+> Prüfe S2 bis S8 in Reihenfolge auf demselben Stack. Verwende keine neuen
+> veröffentlichten Ports und kein Docker-Socket im Testclient. Messe während
+> der Pause ready und unacknowledged, nicht nur nach dem Fortsetzen. Prüfe bei
+> S5 die vollständigen 100 IDs nach Wiederanlauf. Prüfe S4 auch mit offenen SSE-
+> Verbindungen. Ermittle vor jedem Szenario erneut die gültigen Container-Adressen,
+> besonders nach Scale-down und erneutem Scale-up. Behebe Fehler im Rahmen des
+> Plans. Beachte CLAUDE.md. Berichte Messwerte und Änderungen. Kein Commit oder
+> Push vor der Prüfung des Lernenden.
+
+**Geplanter Prüfaufruf:**
+`powershell -NoProfile -File chat-service/src/test/acceptance/verify-live.ps1 -Scenario All`.
+Die einzelnen Messaufrufe sind in Abschnitt 6.1 der Spezifikation dokumentiert.
+
+Prüfwerkzeuge: PowerShell als Docker-Steuerung auf dem vorhandenen
+Windows-Rechner; das kleine Skript `live-client.mjs` mit eingebauten HTTP-/JSON-Funktionen in
+einem temporären `node:22-alpine`-Prüfcontainer. Dies ist Testwerkzeug, kein neuer
+Produktionsdienst oder zusätzliches Produkt-Frontend. Java/JUnit und Testcontainers
+bleiben die automatischen Anwendungstests im normalen Maven-Gesamtlauf.
+
+Der Prüflauf darf keine Volumes löschen. Ergebnisse nach
+`chat-service/target/acceptance/` schreiben; dieser Pfad ist als Build-Artefakt
+ignoriert. Frischer Klon/Build und abschliessendes S8 werden in Schritt 8 ergänzt.
+
+SSE-Testclients müssen UTF-8, mehrere `data:`-Zeilen, aufgeteilte Netzwerkpakete und
+Kommentare korrekt behandeln. Nur vollständige Chat-Ereignisse zählen. Vor dem
+Senden die tatsächliche Bereitschaft jedes Streams abwarten und nach dem erwarteten
+Empfang auch auf zusätzliche IDs/Duplikate prüfen. B bleibt während der gesamten
+S3-Sendeserie verbunden; keine Vorab-Schliessung, die einen Raumfilterfehler verdeckt.
+Neue Räume/IDs trennen Messreihen, nicht das Löschen gespeicherter Daten.
+
+Das Host-Skript setzt bei Fehlern einen Exit-Code ungleich null. Es setzt pausierte
+Container in einer abschliessenden Aufräumphase fort, startet gestoppte Dienste
+wieder und beendet eigene Testclients. Messungen werden nicht durch diese
+Fehlerbehandlung als erfolgreich ausgegeben. Queue-Zustände werden nur gelesen,
+nie mit `basic.get`, Purge oder Löschen für die Messung verändert.
+
+**Geprüft und korrigiert:** Noch nicht durchgeführt.
+
+### Schritt 8 — Frischer Klon und vollständige Schlussabnahme
+
+**Ziel und Reihenfolge:** Die Abgabe wird aus dem tatsächlich versionierten Stand
+und der einzigen Konfigurationsvorlage geprüft, ohne Hilfe aus lokalen Restdateien.
+
+**Auftrag an die KI im Wortlaut:**
+
+> Führe die Schlussabnahme aus einem neuen lokalen Klon des geprüften Commits
+> durch. Erstelle nur .env aus .env.example. Prüfe S1 bis S8 in der vorgegebenen
+> Reihenfolge auf demselben Stack. Halte UUID-Mengen, Reihenfolge, Zeiten,
+> Queue-Zahlen und den Commit in einem Abnahmebericht fest. Melde fehlgeschlagene
+> Szenarien ehrlich und korrigiere sie nur mit nachvollziehbarem Planverlauf.
+> Behalte existierende Datenvolumes der normalen Arbeitsumgebung bei. Setze oder
+> pushe keinen Tag und veröffentliche nichts ohne Zustimmung des Lernenden.
+
+**Test:** Frischer Klon, `mvn clean test`, `.env.example` als Vorlage,
+`docker compose up -d --build`, vollständiger Compose-Prüflauf und S8.
+Der Abschlussbericht nennt die wirklich geprüften Dateien und Messwerte.
+
+Vor dem Start des frischen Klons wird der normale Arbeitsstack kontrolliert mit
+`docker compose down` ohne `-v` beendet. Beide Projekte verwenden den festen
+Netznamen `chat-net`; parallele Stacks würden die Instanzzuordnung und DNS-Prüfung
+verfälschen. Der Prüfklon bekommt einen eigenen Compose-Projektnamen und damit
+eigene Datenvolumes. Innerhalb seiner Abnahme werden diese nicht zurückgesetzt.
+
+**Geprüft und korrigiert:** Noch nicht durchgeführt.
+
+## 5. Veröffentlichung und Abgabe nach erfolgreicher Prüfung
+
+Der geprüfte Stand liegt auf `main` im bisherigen Fork. Mit Zustimmung des
+Lernenden wird `bewertung-2` auf diesen Stand gesetzt und gepusht. Remote-Branch
+und Remote-Tag werden verglichen. `bewertung-1` bleibt unverändert.
+Den Fork-Link reicht der Lernende im Abgabeportal ein.
+
+Termin laut Lernendem: 13.11.2026 gegen Tagesende, Europe/Zurich; eine genaue
+Uhrzeit wurde nicht mitgeteilt. Möglichst bis 16:00 Uhr fertig werden und Reserve
+für Fehler behalten. Verspätung: 0.5 Noten Abzug.
+
+## 6. Änderungen nach Veröffentlichung
+
+Noch keine: Dieser Plan ist ein unveröffentlichter Entwurf. Nach der Freigabe
+werden Änderungen hier mit Datum, betroffenem Schritt, Änderungsgrund, Folge für
+Tests und zugehörigem Commit angehängt. Der ursprüngliche Text bleibt erhalten.
+
+## 7. Zuordnung zu allen Bewertungsteilen
+
+**A — Spezifikation, 8 Punkte.** Vor der Veröffentlichung die eigene Spezifikation
+gegen vier Kriterien prüfen: vollständiger und belegter Vertrag, Normalfall und
+alle S1–S8-Fälle mit Begründung, Queue-Name/Lebensdauer/Überlauf mit begründeten
+Grenzen und messbare Abnahme mit Befehlen. Quellen und Format mit dem vorhandenen
+Code und PDF abgleichen. Die KI darf gegenlesen; die eigene Darstellung des
+Lernenden wird nicht durch eine heimlich neu geschriebene Spezifikation ersetzt.
+
+**B — Plan und Arbeitsweise, 6 Punkte.** Der Plan wird vor dem ersten Code-Patch
+gepusht und auf GitHub geprüft. Die neun Umsetzungsschritte 1, 2, 3a, 3b, 4, 5,
+6, 7 und 8 haben jeweils Ziel, begründete Position, wörtlichen KI-Auftrag, Test
+und Prüfnotiz. Pro Schritt ein fachlicher Commit; deutsche Texte und KI-Trailer.
+Spätere Umplanung nur mit eigenem Änderungsgrund und Commit. Vor dem nächsten
+Schritt prüft der Lernende den vorherigen und trägt tatsächliche Korrekturen ein.
+
+**C — Szenarien, 24 Punkte.** S1 mit dem Maven-Gesamtlauf, S2 und S8 beim frischen
+Start/Stilcheck, S3 mit Schritt 3b und dem Compose-Lauf, S4–S6 mit Schritt 7,
+S7 mit Schritt 5 und dem Compose-Lauf. Schritt 8 prüft abschliessend S1–S8 in
+Reihenfolge, aus dem neuen Klon mit `.env.example` als einziger Vorlage. Kein
+Szenario gilt allein aufgrund eines Unit-Tests oder einer passenden Log-Zeile
+als bestanden. Der Bericht nennt Soll-/Ist-Werte und den geprüften Commit.
+
+**D — Tests, 6 Punkte.** Alle Anwendungstests laufen mit `mvn clean test` in einem
+Lauf; erforderliche Docker-Tests werden nicht deaktiviert oder übersprungen.
+`LiveDistributionIntegrationTest` enthält den echten Zwei-Instanzen-Fall S3,
+`StreamReconnectIntegrationTest` den Neuverbindungsfall S7. RabbitMQ ist echt;
+für den Wiederaufnahmepfad auch PostgreSQL. Der Betrieb mit Docker Compose wird
+zusätzlich geprüft und nicht als Ersatz für die Maven-Tests benutzt.
+
+**E — Code-Review, 16 Punkte.** Nach Feststehen des Abgabecodes und vor dem
+Gesprächstermin erfolgt eine eigene Vorbereitung, ohne neue Produktfunktionen.
+Der Lernende geht selbst durch drei Abläufe: POST an A bis SSE an B, Rückstau/Pause
+aus S6 und Nachlieferung/Übergang aus S7. Zu jeder aufgerufenen Methode muss er
+Datei und Zeile finden, Ursache und Wirkung erklären und den verhinderten Fehler
+nennen. Insbesondere Kanalreihenfolge, Queue-Grenze gegenüber lokalem Client-Puffer,
+ACK gegenüber Client-Empfang und die Rolle der DB bei Wiederaufnahme unterscheiden.
+Tatsächliche verworfene oder geänderte KI-Vorschläge anhand der Prüfnotizen zeigen.
+Zum Abschluss ein 20-Minuten-Probegespräch mit einer Ablauf-Frage und Rückfragen;
+erkannte Wissenslücken werden gezielt wiederholt. Lernnotizen bleiben bei Bedarf
+privat unter `tempContext/`. Diese Vorbereitung ersetzt nicht die Leistung im
+tatsächlichen Gespräch und wird nicht vorab als bestanden markiert.
+
+Vor dem Abgabe-Tag müssen alle vier geforderten Abgaben vorhanden sein. Der Plan
+und die eigenen Tests zielen auf 60 Punkte; ihre blosse Existenz garantiert weder
+die acht Ergebnisse des unbekannten Lehrerskripts noch die 16 Gesprächspunkte.
