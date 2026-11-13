@@ -8,7 +8,7 @@ Live-Zustellung und Wiederaufnahme im bestehenden Chat-Service.
 
 | Baustein | Technologie | Aufgabe | Stand |
 |---|---|---|---|
-| chat-service | Java 21, Spring Boot 3 | POST, eigene Fanout-Queue, SSE je Raum und Wiederaufnahme | implementiert; Anwendungstests vorhanden |
+| chat-service | Java 21, Spring Boot 3 | POST, eigene Fanout-Queue, SSE je Raum und Wiederaufnahme | implementiert; 137 Gesamttests und Compose S2–S8 grün |
 | rabbitmq | RabbitMQ 3.13 | Dauerhafte Persistenz-Queue und eigene Live-Kopie je Chat-Instanz | in Compose eingebunden |
 | batch-writer | Java 21, Spring Boot 3 | Einziger SQL-Schreiber, ACK nach COMMIT | Bewertung 1 abgeschlossen |
 | postgres | PostgreSQL 16 | Dauerhafter Verlauf; Chat-Service liest, Writer schreibt | Schema und Datenvolume vorhanden |
@@ -51,6 +51,18 @@ Der eigene Gesamtlauf vom 13.11.2026 umfasst 137 erfolgreiche Tests ohne Auslass
 deutsche Sprache und Verständlichkeit werden zusätzlich manuell geprüft.
 Die Maven-Testcontainer verwenden eigene, vorübergehende Ports. Das ändert die
 portfreie Produktionskonfiguration in Compose nicht.
+
+Die zusätzliche Compose-Abnahme läuft unter Windows aus einem frischen Stack mit
+anfangs einer Chat-Instanz. Nach dem Maven-Gesamtlauf:
+
+```powershell
+powershell -NoProfile -File chat-service/src/test/acceptance/verify-live.ps1 -Scenario All
+```
+
+`All` führt S2–S8 ohne Datenreset dazwischen aus. Das Skript stoppt und pausiert
+Dienste; es ist für einen eigenen Prüfstack gedacht. Es löscht keine Datenvolumes.
+[Anleitung und Messverfahren](chat-service/src/test/acceptance/README.md) beschreiben
+Voraussetzungen, einzelne Szenarien und die ignorierten Ergebnisdateien.
 
 ## Nachrichtenweg
 

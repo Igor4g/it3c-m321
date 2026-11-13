@@ -473,7 +473,24 @@ wieder und beendet eigene Testclients. Messungen werden nicht durch diese
 Fehlerbehandlung als erfolgreich ausgegeben. Queue-Zustände werden nur gelesen,
 nie mit `basic.get`, Purge oder Löschen für die Messung verändert.
 
-**Geprüft und korrigiert:** Noch nicht durchgeführt.
+**Geprüft und korrigiert:** 13.11.2026, zusammenhängender Lauf S2–S8 unter Windows
+PowerShell 5.1 erfolgreich. Vier Dienste ohne veröffentlichte Host-Ports;
+S3 zweimal exakt 400 vollständige Nachrichten, keine Duplikate, Raum B leer.
+S4 bei offenen SSE-Verbindungen: zwei Queues mit je einem Consumer auf eine
+in 7.678 s. S5 alle 100 live in 619 ms ab erstem POST bzw. 11 ms ab letztem POST;
+nach Wiederanlauf genau dieselben 100 IDs in PostgreSQL.
+S6 aktive Instanz empfängt alle 5000; grösster gemessener Rückstau 1000 inklusive
+unbestätigter Lieferung; nach Fortsetzen neue ID an zuvor pausierter Instanz.
+S7 genau 50 nach 10 s, ohne Duplikate, anschliessend Live; S8 erfolgreich.
+Korrigiert wurden ausschliesslich Prüfwerkzeugfehler: JSON-Array-Ausgabe von
+PowerShell 5.1 einzeln weiterreichen, AMQP-Argumente als typisierte Dreierlisten
+auswerten, UTF-8-BOM im ersten Steuersignal tolerieren und den Originalfehler
+nicht durch bereits laufendes --rm verdecken. Vor SQL-Abfrage wird der gesunde
+PostgreSQL-Wiederanlauf explizit abgewartet; alte eigene Prüfartefakte werden vor
+einem Lauf entfernt. Diese letzten Robustheitsänderungen werden im frischen Klon
+von Schritt 8 vollständig mitgeprüft. Kein Produktionscode geändert.
+Der Lernende hat den persönlichen Review und die Annahme von Schritt 7
+am 13.11.2026 im Gespräch bestätigt.
 
 ### Schritt 8 — Frischer Klon und vollständige Schlussabnahme
 
