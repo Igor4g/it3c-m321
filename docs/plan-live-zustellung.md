@@ -725,3 +725,39 @@ README und neuer Nachprüfbericht ergänzt. Deutsch/Englisch und lokale Links
 geprüft. Anwendung und Tests nach dem Prüfcommit unverändert.
 Veröffentlichter main/bewertung-2 bleiben bis zur ausdrücklichen Entscheidung
 zum Tagwechsel beim bisherigen Stand. Kein persönlicher Review vorweggenommen.
+
+## 9. Erneute Nachprüfung N4 — Beobachtete Nachfolger erhalten, 13.11.2026
+
+**Änderungsgrund:** Die unabhängige Prüfung von `e4b5265` reproduziert einen
+Nachrichtenverlust: eine bereits im RAM nach dem Cursor empfangene und gespeicherte
+Nachricht mit älterem Zeitstempel wird durch die SQL-Vorgängermenge ausgeschlossen.
+Die alte Version konnte diesen Fall. Das widerspricht der vorgesehenen Priorität
+der beobachteten RAM-Position. Der Lernende beauftragt die Korrektur im Gespräch.
+Die bisherigen Planabschnitte und Spezifikation bleiben unverändert.
+
+**Ziel und Position:** Die Ausschlussmenge vor dem Replay richtig abgleichen,
+ohne die zuvor behobenen Cursor-, Vorgänger- oder Übergabefehler wieder zu öffnen.
+
+**Auftrag an die KI im Wortlaut:**
+
+> Ergänze zuerst einen echten HTTP-/RabbitMQ-/PostgreSQL-Regressionstest: Cursor
+> per POST annehmen, danach ein Ereignis mit älterem Zeitpunkt über den Broker
+> empfangen, beide speichern und ihre RAM-Reihenfolge nachweisen. Wiederaufnahme
+> muss das Ereignis vor einer neuen Live-Markierung genau einmal ausgeben.
+> Prüfe auch gleichen Zeitpunkt mit kleinerer UUID und einen echten RAM-Vorgänger
+> mit neuerem Zeitpunkt. Zeige den Fehler vor der Änderung. Ermittle anschliessend
+> begrenzte IDs der im RAM tatsächlich nach dem Cursor empfangenen Nachrichten
+> desselben Raums. Solche IDs dürfen nicht zusätzlich als SQL-Vorgänger gesperrt
+> werden. Cursor und echte bekannte Vorgänger bleiben ausgeschlossen. Bei fehlendem
+> Cursor im RAM bleibt das bisherige SQL-Verhalten erhalten. Keine neuen Abfragen,
+> Konfigurationswerte, Frameworks oder unbeschränkten Mengen. Führe die bestehenden
+> Replay-/Sitzungs-/Stiltests und die vollständige Abnahme im frischen Klon aus.
+
+**Tests:** Neuer parametrisierter Regressionstest zunächst rot; danach
+`mvn -pl chat-service test "-Dtest=StreamReconnectIntegrationTest,StreamSessionTest,CodeStyleTest"`.
+Im frischen Klon anschliessend `mvn clean test` und S2–S8 in Reihenfolge auf
+demselben isolierten Stack. Persönlichen Stack nicht unterbrechen. Netzabweichung
+offen dokumentieren und Originalkonfiguration separat prüfen. Neue Ergebnisse
+mit Datum ergänzen; bereits veröffentlichte Tags nicht ohne neue Freigabe ersetzen.
+
+**Geprüft und korrigiert:** Noch nicht durchgeführt.
