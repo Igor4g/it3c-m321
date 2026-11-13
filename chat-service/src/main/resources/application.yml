@@ -1,6 +1,19 @@
 spring:
   application:
     name: chat-service
+  datasource:
+    url: jdbc:postgresql://${POSTGRES_HOST:localhost}:5432/${POSTGRES_DB:chat}?connectTimeout=2&socketTimeout=5
+    username: ${POSTGRES_USER:chat}
+    password: ${POSTGRES_PASSWORD:chat}
+    hikari:
+      maximum-pool-size: 2
+      minimum-idle: 0
+      connection-timeout: 2000
+      # Ein nicht erreichbarer Lesepfad darf den Live-Dienst nicht am Start hindern.
+      initialization-fail-timeout: -1
+  sql:
+    init:
+      mode: never
   rabbitmq:
     # Im Docker-Netz heisst der Broker "rabbitmq". Beim Start ausserhalb
     # von Docker greift der Vorgabewert "localhost".
@@ -13,6 +26,11 @@ server:
   port: 8080
   # SSE-Verbindungen enden absichtlich nicht von selbst; Scale-down wartet nicht auf sie.
   shutdown: immediate
+
+live:
+  history-size: ${LIVE_HISTORY_SIZE:10000}
+  client-buffer-size: ${LIVE_CLIENT_BUFFER_SIZE:10000}
+  replay-limit: ${LIVE_REPLAY_LIMIT:10000}
 
 logging:
   level:

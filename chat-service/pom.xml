@@ -15,6 +15,16 @@
     <description>Nimmt Nachrichten entgegen und verteilt sie auf Schreib- und Zustellweg</description>
 
     <dependencies>
+        <!-- Nur der Historien-Lesepfad greift auf PostgreSQL zu. -->
+        <dependency>
+            <groupId>org.springframework.boot</groupId>
+            <artifactId>spring-boot-starter-jdbc</artifactId>
+        </dependency>
+        <dependency>
+            <groupId>org.postgresql</groupId>
+            <artifactId>postgresql</artifactId>
+            <scope>runtime</scope>
+        </dependency>
         <!-- REST-Schnittstelle -->
         <dependency>
             <groupId>org.springframework.boot</groupId>
@@ -63,9 +73,21 @@
             <artifactId>rabbitmq</artifactId>
             <scope>test</scope>
         </dependency>
+        <dependency>
+            <groupId>org.testcontainers</groupId>
+            <artifactId>postgresql</artifactId>
+            <scope>test</scope>
+        </dependency>
     </dependencies>
 
     <build>
+        <!-- Tests verwenden das Originalschema des Writers statt einer abweichenden Kopie. -->
+        <testResources>
+            <testResource>
+                <directory>../batch-writer/src/main/resources</directory>
+                <includes><include>schema.sql</include></includes>
+            </testResource>
+        </testResources>
         <plugins>
             <plugin>
                 <groupId>org.springframework.boot</groupId>

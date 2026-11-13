@@ -339,7 +339,14 @@ fremder Raum, gleiche Zeitstempel, begrenzter Speicher und keine Änderungen an
 bestehenden Nachrichtenwerten. Danach `mvn clean test` als Prüfung der betroffenen
 bestehenden Spring-Kontexte und des Writers.
 
-**Geprüft und korrigiert:** Noch nicht durchgeführt.
+**Geprüft und korrigiert:** 13.11.2026, KI-Selbstprüfung: 3 gezielte Tests grün,
+anschliessend `mvn clean test` im Wurzelprojekt vollständig grün einschliesslich
+aller 101 bisherigen Writer-Tests. Originalschema des Writers als Testressource
+verwendet, keine zweite abweichende Schema-Kopie. SQL-Cursor, Raumfilter,
+Mikrosekunden und UUID-Gleichstände oberhalb des Vorzeichenbits real geprüft.
+Jüngster Puffer bleibt begrenzt und erhält Empfangsreihenfolge. Compose bekommt
+DB-Leseparameter, aber keine neue PostgreSQL-Startabhängigkeit des Chat-Service.
+Persönlicher Review dieses Schritts noch offen.
 
 ### Schritt 5 — Wiederaufnahme und atomarer Übergang zu Live
 

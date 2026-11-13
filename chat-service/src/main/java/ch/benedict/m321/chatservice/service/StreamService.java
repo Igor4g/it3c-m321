@@ -27,6 +27,7 @@ public class StreamService {
 
     private final LiveProperties properties;
     private final RabbitListenerEndpointRegistry listenerRegistry;
+    private final RecentMessageBuffer recentMessages;
     private final Object monitor = new Object();
     private final Map<UUID, Set<StreamSession>> clients = new HashMap<>();
 
@@ -51,6 +52,9 @@ public class StreamService {
     public void receive(ChatMessage message) {
         List<StreamSession> fullSessions = new ArrayList<>();
         synchronized (monitor) {
+            if (!recentMessages.add(message)) {
+                return;
+            }
             Set<StreamSession> roomClients = clients.get(message.roomId());
             if (roomClients == null) {
                 return;
